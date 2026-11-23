@@ -1,235 +1,222 @@
 #!/usr/bin/env python3
-"""Erzeugt src/gen/assets.c: Schrift (8x16, normal + fett) und die 48 Profilbilder.
+import warnings; warnings.filterwarnings("ignore")
+"""make_assets.py – erzeugt die Grafik der Heini-App 64 aus dem Programmcode der Heini-App.
 
-Aufruf: python3 tools/make_assets.py <pfad/zu/heini-app/public> <ausgabe.c>
+Aufruf: python3 tools/make_assets.py <heini-app/public> <src/gen>
 
-Schrift: X11-Bitmap-Schrift koi8x16 / koi8x16b (aus den X11-Fonts). ASCII wird übernommen,
-Umlaute und andere Latin-1-Buchstaben werden aus Grundbuchstabe + Akzent gebaut, ß, € und die
-Symbole (Klo, Klopapier, Herz, ...) sind hier von Hand gezeichnet. Kodierung = Latin-1, die
-Symbole liegen auf 0x80..0x9F (siehe src/text.h).
+- Schrift: Roboto Flex (public/fonts, OFL) in mehreren Größen und Stärken, 4-Bit-Kantenglättung
+- Symbole: die Lucide-Pfade aus index.html (ICON_PFADE, ISC-Lizenz), mit rsvg-convert gerastert
+- Emojis: Noto Color Emoji (OFL) für alle Emojis aus den Daten (src/gen/emoji.txt, von export2c.js) und der Oberfläche
+- Profilbilder: public/profilbilder/NN.webp als Figur (132 % der Kreisgröße wie .ava.figur), RGBA4444
+- Farben: Material-You-Schema je Profilfarbe, hell und dunkel, aus dem CSS in index.html
+Ausgabe: src/gen/assets.c und src/gen/assets_gen.h
 """
-import gzip
+import io
+import json
 import os
+import re
+import subprocess
 import sys
 
-from PIL import Image, PcfFontFile
+from PIL import Image, ImageDraw, ImageFont
 
-FONT_DIR = '/usr/share/fonts/X11/cyrillic'
+public, gen = sys.argv[1], sys.argv[2]
+index = open(os.path.join(public, 'index.html'), encoding='utf-8').read()
+EMOJI_FONT = '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf'
 
-# --- Handgezeichnete Zeichen (8 breit, 16 hoch), '#' = Pixel -----------------------------------
-def g(*rows):
-    rows = list(rows)
-    assert len(rows) == 16, rows
-    for r in rows:
-        assert len(r) == 8, r
-    return rows
+out_c, out_h = [], []
+def c(s): out_c.append(s)
+def h(s): out_h.append(s)
 
-E = '........'
-CUSTOM = {
-    # Code: (Name, Bitmap)
-    0x80: ('EURO', g(E, E, E, E, '...####.', '..#....#', '.#......', '#####...', '.#......', '#####...',
-                     '.#......', '..#....#', '...####.', E, E, E)),
-    0x81: ('KLO', g(E, E, '.####...', '.#..#...', '.#..#...', '.####...', '.#..####', '.#######',
-                    '.#######', '..#####.', '...###..', '...##...', '..####..', '..####..', E, E)),
-    0x82: ('KLOPAPIER', g(E, E, E, '.####...', '#....#..', '#.##.###', '#.##.#.#', '#....#.#',
-                          '.####..#', '.#..#..#', '.#..#..#', '.#..#.#.', '.####.#.', '......#.', E, E)),
-    0x83: ('KACKE', g(E, E, '....#...', '...##...', '..####..', '..####..', '.######.', '.#.##.#.',
-                      '########', '#.####.#', '########', '.######.', '########', '########', E, E)),
-    0x84: ('DUSCHE', g(E, '.....##.', '....#..#', '...#...#', '..###..#', '.#####.#', E, '.#.#.#..',
-                       '#.#.#...', '.#.#.#..', '#.#.#...', '.#.#.#..', E, E, E, E)),
-    0x85: ('LACHEN', g(E, E, '..####..', '.#....#.', '#.#..#.#', '#......#', '########', '#.####.#',
-                       '#..##..#', '.#....#.', '..####..', E, E, E, E, E)),
-    0x86: ('HERZ', g(E, E, E, '.##..##.', '########', '########', '########', '.######.', '..####..',
-                     '...##...', E, E, E, E, E, E)),
-    0x87: ('DAUMEN_HOCH', g(E, E, '...#....', '..##....', '..##....', '.##.....', '########', '##.....#',
-                            '##.#####', '##.....#', '##.#####', '##.....#', '#######.', E, E, E)),
-    0x88: ('DAUMEN_RUNTER', g(E, E, '#######.', '##.....#', '##.#####', '##.....#', '##.#####', '##.....#',
-                              '########', '.##.....', '..##....', '..##....', '...#....', E, E, E)),
-    0x89: ('BIER', g(E, E, '.#####..', '#.#.##..', '######..', '#....###', '#.#..#.#', '#.#..#.#',
-                     '#.#..#.#', '#.#..###', '#.#..#..', '#....#..', '######..', E, E, E)),
-    0x8A: ('POKAL', g(E, E, '########', '########', '.######.', '.######.', '..####..', '...##...',
-                      '...##...', '...##...', '..####..', '.######.', '.######.', E, E, E)),
-    0x8B: ('KONTROLLER', g(E, E, E, E, '.######.', '#..##..#', '#.#..#.#', '###..###', '#.#..#.#',
-                           '#..##..#', '########', '###..###', '.#....#.', E, E, E)),
-    0x8C: ('AUTO', g(E, E, E, E, '..####..', '.#.#..#.', '#..#...#', '########', '########',
-                     '########', '.##..##.', '.##..##.', E, E, E, E)),
-    0x8D: ('BETT', g(E, E, E, '#.......', '#.......', '#.##....', '####....', '#.######', '########',
-                     '########', '#......#', '#......#', E, E, E, E)),
-    0x8E: ('KRONE', g(E, E, E, '#..##..#', '#..##..#', '##.##.##', '########', '########', '########',
-                      '#.#.#.##', '########', E, E, E, E, E)),
-    0x8F: ('STERN', g(E, E, '...##...', '...##...', '..####..', '########', '.######.', '..####..',
-                      '.######.', '.##..##.', '##....##', E, E, E, E, E)),
-    0x90: ('HAKEN', g(E, E, E, E, '.......#', '......##', '.....##.', '#...##..', '##.##...',
-                      '.###....', '..#.....', E, E, E, E, E)),
-    0x91: ('KREUZ', g(E, E, E, E, '##....##', '.##..##.', '..####..', '...##...', '..####..',
-                      '.##..##.', '##....##', E, E, E, E, E)),
-    0x92: ('PUNKT', g(E, E, E, E, E, E, '..##....', '.####...', '.####...', '..##....', E, E, E, E, E, E)),
-    0x93: ('PFEIL_R', g(E, E, E, '.#......', '.##.....', '.###....', '.####...', '.#####..', '.####...',
-                        '.###....', '.##.....', '.#......', E, E, E, E)),
-    0x94: ('PFEIL_L', g(E, E, E, '......#.', '.....##.', '....###.', '...####.', '..#####.', '...####.',
-                        '....###.', '.....##.', '......#.', E, E, E, E)),
-    0x95: ('PFEIL_O', g(E, E, E, E, E, '...##...', '..####..', '.######.', '########', E, E, E, E, E, E, E)),
-    0x96: ('PFEIL_U', g(E, E, E, E, E, '########', '.######.', '..####..', '...##...', E, E, E, E, E, E, E)),
-    0x97: ('BIRNE', g(E, E, '..####..', '.#....#.', '#......#', '#......#', '#......#', '.#....#.',
-                      '..#..#..', '..####..', '..####..', '...##...', E, E, E, E)),
-    0x98: ('NADEL', g(E, E, '..####..', '..####..', '...##...', '..####..', '.######.', '########',
-                      '...##...', '...##...', '...##...', '...#....', E, E, E, E)),
-    0x99: ('UHR', g(E, E, '..####..', '.#..#.#.', '#...#..#', '#...#..#', '#...###.', '#......#',
-                    '#......#', '.#....#.', '..####..', E, E, E, E, E)),
-    0x9A: ('BOX_LEER', g(E, E, E, '########', '#......#', '#......#', '#......#', '#......#', '#......#',
-                         '#......#', '#......#', '########', E, E, E, E)),
-    0x9B: ('BOX_VOLL', g(E, E, E, '########', '#......#', '#.....##', '#....###', '##..##.#', '#####..#',
-                         '#.##...#', '#......#', '########', E, E, E, E)),
-    0x9C: ('KAMERA', g(E, E, E, '..##....', '########', '#..##..#', '#.#..#.#', '#.#..#.#', '#..##..#',
-                       '#......#', '########', E, E, E, E, E)),
-    0x9D: ('NOTE', g(E, E, '...#####', '...#...#', '...#####', '...#...#', '...#...#', '...#...#',
-                     '.###.###', '####.###', '.##...#.', E, E, E, E, E)),
-    0x9E: ('HAUS', g(E, E, '...##...', '..####..', '.######.', '########', '.#....#.', '.#.##.#.',
-                     '.#.##.#.', '.#.##.#.', '.######.', E, E, E, E, E)),
-    0x9F: ('ALARM', g(E, E, '...##...', '..####..', '..####..', '.######.', '.######.', '.######.',
-                      '########', '########', E, '...##...', E, E, E, E)),
-}
+def arr_u8(name, data):
+    c('static const uint8_t %s[%d] = {' % (name, max(1, len(data))))
+    for i in range(0, len(data), 32):
+        c('  ' + ','.join(str(b) for b in data[i:i + 32]) + ',')
+    if not data: c('  0')
+    c('};')
 
-SZ = g(E, E, E, E, '..###...', '.#...#..', '.#...#..', '.#..#...', '.#.##...', '.#...#..',
-       '.#....#.', '.#....#.', '.#.###..', E, E, E)
+def arr_u16(name, data, static=True):
+    c('%sconst uint16_t %s[%d] = {' % ('static ' if static else '', name, max(1, len(data))))
+    for i in range(0, len(data), 24):
+        c('  ' + ','.join('0x%04x' % v for v in data[i:i + 24]) + ',')
+    if not data: c('  0')
+    c('};')
 
-ACCENTS = {
-    'diaer': ['.#..#...', E],
-    'acute': ['....#...', '...#....'],
-    'grave': ['..#.....', '...#....'],
-    'circ': ['...##...', '..#..#..'],
-    'tilde': ['..##.#..', '.#.##...'],
-    'ring': ['...##...', '...##...'],
-}
-# Latin-1-Code -> (Grundbuchstabe, Akzent)
-LATIN1 = {}
-for base, acc, up, low in [
-    ('A', 'grave', 0xC0, 0xE0), ('A', 'acute', 0xC1, 0xE1), ('A', 'circ', 0xC2, 0xE2), ('A', 'tilde', 0xC3, 0xE3),
-    ('A', 'diaer', 0xC4, 0xE4), ('A', 'ring', 0xC5, 0xE5), ('E', 'grave', 0xC8, 0xE8), ('E', 'acute', 0xC9, 0xE9),
-    ('E', 'circ', 0xCA, 0xEA), ('E', 'diaer', 0xCB, 0xEB), ('I', 'grave', 0xCC, 0xEC), ('I', 'acute', 0xCD, 0xED),
-    ('I', 'circ', 0xCE, 0xEE), ('I', 'diaer', 0xCF, 0xEF), ('N', 'tilde', 0xD1, 0xF1), ('O', 'grave', 0xD2, 0xF2),
-    ('O', 'acute', 0xD3, 0xF3), ('O', 'circ', 0xD4, 0xF4), ('O', 'tilde', 0xD5, 0xF5), ('O', 'diaer', 0xD6, 0xF6),
-    ('U', 'grave', 0xD9, 0xF9), ('U', 'acute', 0xDA, 0xFA), ('U', 'circ', 0xDB, 0xFB), ('U', 'diaer', 0xDC, 0xFC),
-    ('Y', 'acute', 0xDD, 0xFD)]:
-    LATIN1[up] = (base, acc)
-    LATIN1[low] = (base.lower(), acc)
+def nibbles(vals):
+    vals = list(vals)
+    if len(vals) % 2: vals.append(0)
+    return [(vals[i] << 4) | vals[i + 1] for i in range(0, len(vals), 2)]
 
+def rgba4444(im):
+    im = im.convert('RGBA')
+    return [((r >> 4) << 12) | ((g >> 4) << 8) | ((b >> 4) << 4) | (a >> 4) for r, g, b, a in im.getdata()]
 
-def load_font(name):
-    f = PcfFontFile.PcfFontFile(gzip.open(os.path.join(FONT_DIR, name)), 'iso8859-1')
-    glyphs = {}
-    for c in range(32, 127):
-        gl = f.glyph[c]
-        if not gl:
-            continue
-        im = gl[3]
-        w, h = im.size
-        rows = []
-        for y in range(16):
-            r = ''
-            for x in range(8):
-                r += '#' if (x < w and y < h and im.getpixel((x, y))) else '.'
-            rows.append(r)
-        glyphs[c] = rows
-    return glyphs
+# ------------------------------------------------------------------ Schrift
+SCHRIFT = os.path.join(public, 'fonts', 'roboto-flex.woff2')
+EXTRA = '„“”‚‘’–—…€•→←×✓·−›‹⋮'
+ZEICHEN = [chr(i) for i in range(32, 127)] + [chr(i) for i in range(160, 256)] + list(EXTRA)
+ZIFFERN = list('0123456789:.,-+ %€/hMinSek')
+SCHRIFTEN = [   # Name, Größe, Stärke, Zeichen
+    ('F_KLEIN', 13, 450, ZEICHEN),
+    ('F_NORMAL', 16, 420, ZEICHEN),
+    ('F_FETT', 16, 650, ZEICHEN),
+    ('F_TITEL', 19, 720, ZEICHEN),
+    ('F_KOPF', 27, 400, ZEICHEN),
+    ('F_GROSS', 32, 800, ZEICHEN),
+    ('F_UHR', 52, 700, ZIFFERN + list('läuft offen')),
+]
+h('enum { ' + ', '.join(s[0] for s in SCHRIFTEN) + ', F_ANZAHL };')
+schrift_namen = []
+for name, groesse, staerke, zeichen in SCHRIFTEN:
+    f = ImageFont.truetype(SCHRIFT, groesse)
+    try: f.set_variation_by_axes([staerke])
+    except Exception: pass
+    asc, desc = f.getmetrics()
+    hoehe = asc + desc
+    glyphen, daten = [], []
+    for ch in sorted(set(zeichen), key=ord):
+        adv = int(round(f.getlength(ch)))
+        l, t, r, b = f.getbbox(ch)
+        x0 = min(0, l); x1 = max(adv, r)
+        w = max(1, x1 - x0)
+        im = Image.new('L', (w, hoehe), 0)
+        ImageDraw.Draw(im).text((-x0, 0), ch, font=f, fill=255)
+        px = [min(15, (v + 8) >> 4) for v in im.getdata()]
+        glyphen.append((ord(ch), x0, w, adv, len(daten) * 2))
+        daten += nibbles(px)
+    arr_u8('sd_%s' % name, daten)
+    c('static const Glyph sg_%s[] = {' % name)
+    for cp, ox, w, adv, off in glyphen:
+        c('  {%d, %d, %d, %d, %d},' % (cp, ox, w, adv, off // 2))
+    c('};')
+    schrift_namen.append((name, hoehe, asc, len(glyphen)))
+c('const Schrift SCHRIFTEN[F_ANZAHL] = {')
+for name, hoehe, asc, n in schrift_namen:
+    c('  {%d, %d, %d, sg_%s, sd_%s},' % (hoehe, asc, n, name, name))
+c('};')
 
+# ------------------------------------------------------------------ Symbole (Lucide)
+pfade = json.loads(subprocess.check_output(['node', '-e', r'''
+const fs = require('fs'); const s = fs.readFileSync(process.argv[1], 'utf8');
+const a = s.indexOf('const ICON_PFADE = {'), z = s.indexOf('const hsym');
+let code = s.slice(a, z).split('\n').filter(l => /^(const ICON_PFADE|ICON_PFADE|\s+['"a-z0-9-]+\s*:|\};)/.test(l) || /^\s+'/.test(l)).join('\n');
+eval(code + '; process.stdout.write(JSON.stringify(ICON_PFADE))');
+''', os.path.join(public, 'index.html')]).decode())
+namen = sorted(pfade)
+GROESSEN = [20, 28]
+h('enum { ' + ', '.join('IC_' + re.sub('[^A-Za-z0-9]', '_', n).upper() for n in namen) + ', IC_ANZAHL };')
+h('#define IC_GROESSEN %d' % len(GROESSEN))
+h('extern const uint8_t IC_PX[IC_GROESSEN];')
+c('const uint8_t IC_PX[IC_GROESSEN] = {%s};' % ','.join(map(str, GROESSEN)))
+for g in GROESSEN:
+    alle = []
+    for n in namen:
+        svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 24 24" fill="none" stroke="white" '
+               'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">%s</svg>') % (g, g, pfade[n])
+        png = subprocess.run(['rsvg-convert', '-w', str(g), '-h', str(g)], input=svg.encode(), capture_output=True, check=True).stdout
+        im = Image.open(io.BytesIO(png)).convert('RGBA').getchannel('A')
+        alle += nibbles(min(15, (v + 8) >> 4) for v in im.getdata())
+    arr_u8('ic%d' % g, alle)
+c('const uint8_t *const IC_DATEN[IC_GROESSEN] = {%s};' % ','.join('ic%d' % g for g in GROESSEN))
+h('extern const uint8_t *const IC_DATEN[IC_GROESSEN];')
 
-def orx(a, b):
-    return ''.join('#' if (p == '#' or q == '#') else '.' for p, q in zip(a, b))
+# ------------------------------------------------------------------ Emojis
+ui_emojis = '⏰🐌🎟🧭👻🤷🌅🦉🐣🗺💶📷🎤❔🏃🚽🧻💩🚿😂❤🍺🏆🥇🎉👋🦸🙈⏳🎮🚗🛏👑⭐✨✅❌📌🕒📸🎵🏠🚨🔔💡🍕🛒🥤🎫📦🎯🔥💯👍👎😍😘😊🙂😅🤣😁😎🤔😢😭😡🥳🙏💪👏🤝🍻🍷🥂🍾🍔🍟🌭🍿☕🎂🎁🎄🎅⛄❄🌞🌙⚡💤🧽🪥🧴🛁🚪🔑📅🗓️🎲🃏🎳🎤🎧📺💻📱🍀🌈💕💛💚💙💜🖤🤍🤎🧡🐣🥉🥈🎖💯📅🗓🏡🛏🏨🎫🔗🌳🪨📆🦸🎢🚲🧳🏟🔙🎆🔥⏳🏰👯🌅🦉🎯⚡🏃🔁🚨🏠🎟💛📸💬⏱🧭👻🤷💩🙈👑'
+liste = set()
+pfad = os.path.join(gen, 'emoji.txt')
+if os.path.exists(pfad):
+    for z in open(pfad, encoding='utf-8'):
+        z = z.strip()
+        if z: liste.add(int(z, 16))
+for ch in ui_emojis:
+    if ord(ch) >= 0x2100 and ord(ch) not in (0xFE0F, 0x200D): liste.add(ord(ch))
+ef = ImageFont.truetype(EMOJI_FONT, 109)
+emojis = []
+for cp in sorted(liste):
+    im = Image.new('RGBA', (160, 160), (0, 0, 0, 0))
+    try:
+        ImageDraw.Draw(im).text((10, 10), chr(cp), font=ef, embedded_color=True)
+    except Exception:
+        continue
+    box = im.getbbox()
+    if not box: continue
+    im = im.crop(box)
+    s = max(im.size)
+    q = Image.new('RGBA', (s, s), (0, 0, 0, 0)); q.alpha_composite(im, ((s - im.width) // 2, (s - im.height) // 2))
+    emojis.append((cp, q))
+EGR = [22, 36]
+h('#define EMOJI_GROESSEN %d' % len(EGR))
+h('extern const uint8_t EMOJI_PX[EMOJI_GROESSEN];')
+c('const uint8_t EMOJI_PX[EMOJI_GROESSEN] = {%s};' % ','.join(map(str, EGR)))
+c('const uint32_t EMOJI_CP[] = {%s};' % ','.join('0x%x' % cp for cp, _ in emojis))
+c('const int EMOJI_N = %d;' % len(emojis))
+h('extern const uint32_t EMOJI_CP[]; extern const int EMOJI_N;')
+for g in EGR:
+    alle = []
+    for cp, q in emojis: alle += rgba4444(q.resize((g, g), Image.LANCZOS))
+    arr_u16('em%d' % g, alle)
+c('const uint16_t *const EMOJI_DATEN[EMOJI_GROESSEN] = {%s};' % ','.join('em%d' % g for g in EGR))
+h('extern const uint16_t *const EMOJI_DATEN[EMOJI_GROESSEN];')
+# großes Klopapier für den Alarm
+im = Image.new('RGBA', (160, 160), (0, 0, 0, 0)); ImageDraw.Draw(im).text((10, 10), '🧻', font=ef, embedded_color=True)
+im = im.crop(im.getbbox()).resize((96, 96), Image.LANCZOS)
+arr_u16('klopapier96', rgba4444(im), static=False)
+h('extern const uint16_t klopapier96[96 * 96];')
 
+# ------------------------------------------------------------------ Profilbilder (Figur)
+AGR = [52, 36]   # Figur zu Kreis 40 bzw. 28
+h('#define AVA_GROESSEN 2')
+h('extern const uint8_t AVA_PX[AVA_GROESSEN];')
+c('const uint8_t AVA_PX[AVA_GROESSEN] = {52, 36};')
+for g in AGR:
+    alle = []
+    for i in range(1, 49):
+        im = Image.open(os.path.join(public, 'profilbilder', '%02d.webp' % i)).convert('RGBA')
+        alle += rgba4444(im.resize((g, g), Image.LANCZOS))
+    arr_u16('ava%d' % g, alle)
+c('const uint16_t *const AVA_DATEN[AVA_GROESSEN] = {ava52, ava36};')
+h('extern const uint16_t *const AVA_DATEN[AVA_GROESSEN];')
 
-def build(glyphs, bold):
-    out = {}
-    for c in range(256):
-        out[c] = [E] * 16
-    for c, rows in glyphs.items():
-        out[c] = rows
-    for c, (base, acc) in LATIN1.items():
-        rows = list(glyphs[ord(base)])
-        a = ACCENTS[acc]
-        if bold:
-            a = [orx(r, r[1:] + '.') for r in a]
-        top = 2 if base.isupper() else 3 if base not in 'i' else 2
-        if base == 'i':
-            # Punkt vom i entfernen
-            rows = [E if y < 6 else r for y, r in enumerate(rows)]
-            top = 3
-        if base.isupper() and acc != 'diaer':
-            # Großbuchstabe um eine Zeile nach unten schieben, damit der Akzent Platz hat
-            rows = [E] + rows[:-1]
-            top = 1
-        for i, ar in enumerate(a):
-            rows[top + i] = orx(rows[top + i], ar)
-        out[c] = rows
-    sz = SZ
-    if bold:
-        sz = [orx(r, r[1:] + '.') for r in sz]
-    out[0xDF] = sz
-    for c, (_, rows) in CUSTOM.items():
-        out[c] = rows
-    out[0xA0] = [E] * 16
-    out[0xB7] = CUSTOM[0x92][1]  # Mittelpunkt
-    out[0xB0] = g(E, E, '..##....', '.#..#...', '.#..#...', '..##....', E, E, E, E, E, E, E, E, E, E)  # Grad
-    out[0xA7] = glyphs[ord('S')]
-    return out
+# ------------------------------------------------------------------ Logo
+im = Image.open(os.path.join(public, 'icons', 'icon-512.png')).convert('RGBA').resize((128, 128), Image.LANCZOS)
+arr_u16('logo128', rgba4444(im), static=False)
+h('extern const uint16_t logo128[128 * 128];')
 
+# ------------------------------------------------------------------ Farben
+def rgb5551(hx):
+    hx = hx.strip().lstrip('#')
+    if len(hx) == 3: hx = ''.join(ch * 2 for ch in hx)
+    r, g, b = int(hx[0:2], 16), int(hx[2:4], 16), int(hx[4:6], 16)
+    return ((r >> 3) << 11) | ((g >> 3) << 6) | ((b >> 3) << 1) | 1
+def vars_von(block):
+    return dict(re.findall(r'--([A-Za-z0-9]+):\s*(#[0-9a-fA-F]{3,6})', block))
+basis_hell = vars_von(re.search(r':root \{(.*?)\n\}', index, re.S).group(1))
+basis_dunkel = vars_von(re.search(r':root\[data-theme=dark\] \{(.*?)\n\}', index, re.S).group(1))
+for m in re.finditer(r':root(\[data-theme=dark\])? \{ (--gold[^}]*)\}', index):
+    (basis_dunkel if m.group(1) else basis_hell).update(vars_von(m.group(2)))
+farben = json.loads(subprocess.check_output(['node', '-e', 'process.stdout.write(JSON.stringify(require(process.argv[1]).WERTE.farben))',
+                                              os.path.join(public, 'rules.js')]).decode())
+FELDER = ['oben', 'onOben', 'bg', 'flaeche', 'flaeche2', 'line', 'edge', 'text', 'muted', 'faint', 'accent', 'onAccent', 'accentText',
+          'accentCont', 'onAccentCont', 'ok', 'okBg', 'warn', 'warnBg', 'err', 'errBg', 'alarm', 'onAlarm', 'alarmBg',
+          'goldBg1', 'goldBg2', 'goldRand', 'goldText', 'goldStern']
+h('typedef struct { uint16_t ' + ', '.join(FELDER) + '; } Thema;')
+h('extern const Thema THEMEN[%d][2];   /* [Profilfarbe][0 hell, 1 dunkel] */' % len(farben))
+c('const Thema THEMEN[%d][2] = {' % len(farben))
+for f in farben:
+    zeile = []
+    for dunkel in (0, 1):
+        m = re.search(r':root\[data-farbe=%s\]%s \{(.*?)\}' % (f, r'\[data-theme=dark\]' if dunkel else ''), index)
+        v = dict(basis_dunkel if dunkel else basis_hell)
+        v.update(vars_von(m.group(1)))
+        zeile.append('{' + ','.join('0x%04x' % rgb5551(v.get(k, '#ff00ff')) for k in FELDER) + '}')
+    c('  {' + ', '.join(zeile) + '},')
+c('};')
 
-def to_bytes(rows):
-    return [int(r.replace('#', '1').replace('.', '0'), 2) for r in rows]
-
-
-def rgba5551(r, g_, b, a):
-    return ((r >> 3) << 11) | ((g_ >> 3) << 6) | ((b >> 3) << 1) | (1 if a >= 128 else 0)
-
-
-def avatar(path, size):
-    im = Image.open(path).convert('RGBA')
-    im = im.resize((size, size), Image.LANCZOS)
-    px = []
-    for y in range(size):
-        for x in range(size):
-            r, g_, b, a = im.getpixel((x, y))
-            px.append(rgba5551(r, g_, b, a))
-    return px
-
-
-def main():
-    public, out_path = sys.argv[1], sys.argv[2]
-    reg = build(load_font('koi8x16.pcf.gz'), False)
-    bold = build(load_font('koi8x16b.pcf.gz'), True)
-    lines = ['/* Erzeugt von tools/make_assets.py – nicht von Hand ändern. */', '#include "../assets.h"', '']
-    for name, f in (('font_regular', reg), ('font_bold', bold)):
-        lines.append('const uint8_t %s[256][16] = {' % name)
-        for c in range(256):
-            lines.append('  {%s},' % ','.join('0x%02x' % v for v in to_bytes(f[c])))
-        lines.append('};')
-    for size in (48, 24):
-        lines.append('const uint16_t avatar%d[48][%d] = {' % (size, size * size))
-        for i in range(1, 49):
-            px = avatar(os.path.join(public, 'profilbilder', '%02d.webp' % i), size)
-            lines.append('  { /* %02d */' % i)
-            for k in range(0, len(px), 24):
-                lines.append('    ' + ','.join('0x%04x' % v for v in px[k:k + 24]) + ',')
-            lines.append('  },')
-        lines.append('};')
-    # Startlogo: das App-Icon verkleinert (128x128)
-    px = avatar(os.path.join(public, 'icons', 'icon-512.png'), 128)
-    lines.append('const uint16_t logo128[128*128] = {')
-    for k in range(0, len(px), 32):
-        lines.append('  ' + ','.join('0x%04x' % v for v in px[k:k + 32]) + ',')
-    lines.append('};')
-    with open(out_path, 'w') as fh:
-        fh.write('\n'.join(lines) + '\n')
-    # Kontrollbild der Schrift
-    if len(sys.argv) > 3:
-        sheet = Image.new('L', (16 * 9 * 2, 16 * 17 * 2), 0)
-        for c in range(256):
-            for y, r in enumerate(bold[c] if False else reg[c]):
-                for x, ch in enumerate(r):
-                    if ch == '#':
-                        sheet.putpixel(((c % 16) * 9 * 2 + x * 2, (c // 16) * 17 * 2 + y * 2), 255)
-        sheet.save(sys.argv[3])
-
-
-if __name__ == '__main__':
-    main()
+# ------------------------------------------------------------------ schreiben
+kopf_h = ['/* Erzeugt von tools/make_assets.py – nicht von Hand ändern */', '#ifndef ASSETS_GEN_H', '#define ASSETS_GEN_H', '#include <stdint.h>',
+          'typedef struct { uint16_t cp; int8_t ox; uint8_t w, adv; uint32_t off; } Glyph;',
+          'typedef struct { uint8_t hoehe, ascent; uint16_t n; const Glyph *g; const uint8_t *daten; } Schrift;']
+h('extern const Schrift SCHRIFTEN[F_ANZAHL];')
+open(os.path.join(gen, 'assets_gen.h'), 'w').write('\n'.join(kopf_h + out_h + ['#endif']) + '\n')
+open(os.path.join(gen, 'assets.c'), 'w').write('/* Erzeugt von tools/make_assets.py – nicht von Hand ändern */\n#include "assets_gen.h"\n' + '\n'.join(out_c) + '\n')
+print('Schriften %d, Symbole %d, Emojis %d' % (len(SCHRIFTEN), len(namen), len(emojis)))

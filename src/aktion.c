@@ -534,7 +534,7 @@ static const char *ausfuehren(Aktion *a) {
         return NULL;
     }
     }
-    return "Unbekannte Aktion.";
+    return ausfuehren2(a);
 }
 
 /* ---------- Journal im SRAM ----------
@@ -586,7 +586,10 @@ const char *tu(Aktion *a) {
     jetzt = a->zeit;
     uhren_aufraeumen(jetzt);
     const char *f = ausfuehren(a);
+    if (!f && a->typ == A_DESIGN) { ich = alt_ich; if (!journal_wird_geladen) jetzt = alt_jetzt; }
     if (!f) {
+        const char *v = verlauf_satz(a);
+        if (v) { Verlauf *x = TAB_NEU(db.verlauf); x->profil = a->profil; x->typ = a->typ; x->zeit = a->zeit; x->text = text_kopie(v); }
         erfolge_pruefen();
         if (a->zeit > j_letzte) j_letzte = a->zeit;
         if (!journal_wird_geladen && journal_schreiben(a) < 0) f = "Der Speicher auf dem Modul ist voll. Die Änderung gilt nur bis zum Ausschalten.";

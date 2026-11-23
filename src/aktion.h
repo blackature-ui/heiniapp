@@ -12,6 +12,13 @@ enum {
     A_AUSGABE, A_AUSGABE_WEG, A_KASSE_ZU, A_KASSE_AUF, A_ZAHLUNG,
     A_DAUMEN, A_ERLEDIGT, A_KOMMENTAR, A_AGENDA, A_REGEL, A_TREFFEN_BEENDEN, A_IDEE, A_STATUS,
     A_EINCHECKEN_FUER, A_AGENDA_WEG, A_KOMMENTAR_WEG, A_NACHRICHT_WEG,
+    /* ab Version 2 */
+    A_TREFFEN_NEU, A_TREFFEN_AENDERN, A_TREFFEN_ABSAGEN, A_PROFIL,
+    A_RAUM_NEU, A_RAUM_AENDERN, A_RAUM_WEG, A_PLATZ_NEU, A_PLATZ_WEG, A_UTENSIL_NEU, A_UTENSIL_AENDERN, A_UTENSIL_WEG,
+    A_KONSOLE_NEU, A_KONSOLE_WEG, A_DING_NEU, A_DING_WEG, A_WICHTEL, A_WICHTEL_WEG,
+    A_PAAR_ANFRAGE, A_PAAR_ANTWORT, A_PAAR_LOESEN, A_WOHNEN,
+    A_TRIP_NEU, A_TRIP_WEG, A_FAHRT_NEU, A_FAHRT_WEG, A_MITFAHREN, A_AUSSTEIGEN, A_FAHRTKOSTEN,
+    A_ESSEN, A_BESUCH, A_TEMPERATUR, A_DESIGN,
     A_ANZAHL
 };
 
@@ -40,6 +47,13 @@ zeit_t journal_letzte_zeit(void);
 void journal_loeschen(void);
 
 void system_nachricht(const char *text);
+const char *ausfuehren2(Aktion *a);       /* aktion2.c */
+const char *verlauf_satz(const Aktion *a); /* Zeile für den Änderungsverlauf, NULL = keine */
+int text_teile(char *s, char **teile, int max);   /* zerlegt an \x1f */
+#define TRENN "\x1f"
+/* Felder für A_PROFIL (a) */
+enum { P_FARBE = 1, P_BILD, P_WOHNORT, P_STRASSE, P_PLZ, P_GASTGEBER, P_AUTO, P_AUTO_NAME, P_AUTO_PLAETZE, P_VERBRAUCH, P_ELEKTRO,
+       P_KEIN_ALKOHOL, P_PAYPAL, P_WUNSCH_TEMP, P_PARKPLAETZE, P_PARK_HINWEIS, P_UNVERTRAEGLICH, P_MAG_NICHT };
 extern int letzte_neue_nachricht;         /* Index der zuletzt angelegten Nachricht */
 
 #endif

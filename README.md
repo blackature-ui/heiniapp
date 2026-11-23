@@ -30,35 +30,40 @@ Kasse und Ruhmeshalle. Profile wählt man vor dem Start im Hauptmenü.
 
 Bildschirmtastatur: A tippen, B löschen, Z groß, L Symbole/Emojis, R Leerzeichen, START fertig.
 
+## Aussehen
+
+Wie am Handy: Material-You-Farben aus der Profilfarbe (hell oder dunkel, in den Einstellungen umschaltbar),
+Kopfzeile mit Pokal, Chat und eigenem Profilbild, „Wer ist da?“-Zeile, unten die Reiterleiste mit den
+originalen Lucide-Symbolen (Haus, Kalender, Euro, Ortsmarke, Formen), Karten, Segmente, Bottom-Sheets,
+Toasts, Roboto-Flex-Schrift mit Kantenglättung und Farb-Emojis (Noto Color Emoji).
+
 ## Was geht, was nicht
 
 Portiert: Hauptmenü mit Profilwahl, Heute (Klo-Weisheit, laufende Uhr mit Ring, „Rein“, Warteschlange,
-„Als Pärchen“, „Dauert länger“, Klopapier-Alarm als Vollbild, Ankunft und Einchecken, Dein Tag, Kasse kurz,
-Offenes, Nach dem Treffen), Plan (Zeitleiste je Bad und Tag), Kasse & Trips (Ausgaben eintragen und löschen,
-Stände, Direktzahlungen, Kasse schließen/öffnen, Zahlungen melden/bestätigen, Trips und Autos ansehen),
-Treffen (Liste, Detail, Zusagen, Agenda, Kommentare, Schlafplätze je Nacht, Utensilien, Bäder, Gold, Treffen
-verlassen und beenden), Aktivitäten & Ideen (Daumen, erledigt, neue Ideen und Bucketliste), Chat (Verlauf,
-schreiben, antworten, reagieren, anheften, löschen, Umfragen starten/abstimmen/beenden), Ruhmeshalle (Rekorde
-des Treffens, ewige Bestenliste, Trophäenschrank, neue Trophäen nach dem Export), Profile, Wer ist da?,
-Frühere Treffen mit Statistik, Einstellungen (Uhr, Bad-Regel, Speicher).
+„Als Pärchen“, „Dauert länger“, Klopapier-Alarm als Vollbild, Ankunft, „Mein Heini-Treffen“, Kasse kurz,
+Offenes, Nach dem Treffen), Plan (Zeitleiste je Bad und Tag, eigenen Besuch nachträglich korrigieren),
+Kasse & Trips (Ausgaben, Essensbestellung mit Einzelbeträgen und Lieferkosten, Stände, Direktzahlungen,
+Kasse schließen/öffnen, Zahlungen, Trips und Autos anlegen, mitfahren, Fahrtkosten abrechnen),
+Treffen (anlegen, bearbeiten, absagen, beenden, Zusagen, Agenda, Kommentare, Schlafplätze je Nacht,
+Utensilien ausleihen, Bäder, Wunschtemperatur, Gold), Aktivitäten & Ideen, Chat (schreiben, antworten,
+reagieren, anheften, löschen, Umfragen), Ruhmeshalle, Profile ansehen und bearbeiten (Über dich, Adresse,
+Profilbild, Farbe, Gaming und Konsolen, Auto, Vorlieben, Pärchen anfragen/annehmen/lösen, „Wir wohnen
+zusammen“, Wichtel, Gastgeber mit Räumen, Plätzen, Parkplätzen und Utensilien), Wer ist da?, Frühere Treffen
+mit Statistik, Einstellungen (Design, Uhr, Regeln, Speicher), Änderungsverlauf, Tour.
 
-Nicht möglich ohne Internet: Abgleich mit dem Pi, Push, HeinAI, Spielesuche, YouTube-Vorschauen, Fotos,
-GIFs und Sprachnachrichten (im Chat steht nur „1 Foto (nur in der App)“), OneDrive-Links öffnen.
-
-Noch nicht portiert: Treffen anlegen und bearbeiten, Profile bearbeiten (außer Status), Räume, Plätze, Utensilien,
-Konsolen, Spiele und Wichtel verwalten, Pärchen anfragen und „Wir wohnen zusammen“ umschalten, Trips und Autos
-anlegen und Fahrtkosten abrechnen, Essensbestellung mit Einzelbeträgen, Bad-Besuch nachträglich bearbeiten,
-Wunschtemperatur-Todos, Erinnerungen, Änderungsverlauf, Feedback, Tour, Teilen als Bild.
-Änderungen am Fernseher fließen nicht zurück in die Web-App.
+Nicht möglich ohne Internet: Abgleich mit dem Pi, Push und Erinnerungen, HeinAI, Spielesuche,
+YouTube-Vorschauen, Fotos, GIFs und Sprachnachrichten (im Chat steht nur „1 Foto (nur in der App)“),
+OneDrive-Links, Feedback, Teilen als Bild. Änderungen am Fernseher fließen nicht zurück in die Web-App.
 
 ## Bauen
 
 Benötigt: `clang` und `ld.lld` (LLVM ≥ 15, mit MIPS-Ziel), `python3` mit Pillow, `node` (≥ 20) und den
-Programmcode der Heini-App (Ordner `public/` mit `logik.js`, `rules.js`, Profilbildern und Logo).
+Programmcode der Heini-App (Ordner `public/` mit `logik.js`, `rules.js`, `index.html`, Profilbildern und Logo).
+Für `make assets` zusätzlich `rsvg-convert`, die Schriften Roboto Flex und Noto Color Emoji.
 
 ```sh
 make daten EXPORT=heini-app-export.json HEINI_PUBLIC=../heini-app/public   # src/gen/data.c + Prüfwerte
-make assets HEINI_PUBLIC=../heini-app/public                                # src/gen/assets.c (Schrift, Bilder)
+make assets HEINI_PUBLIC=../heini-app/public                                # src/gen/assets.c (Schrift, Symbole, Emojis, Bilder)
 make test          # Selbsttest der Kasse und Weisheit gegen logik.js (PC)
 make               # build/heini-app-64.z64
 ```
@@ -83,4 +88,9 @@ kleine C-Bibliothek. Code ist MIPS II (läuft auf der VR4300), ohne Gleitkomma.
 
 `build/heini-app-64.z64` auf ein Flashcart (EverDrive 64, SummerCart64 …) kopieren. Der ROM-Kopf meldet
 „SRAM 256 kbit + Echtzeituhr“ (erweiterter Homebrew-Kopf); falls das Flashcart fragt: Speichertyp SRAM 32 KB.
-Läuft auf PAL- und NTSC-Konsolen (640 × 480, Zeilensprung), ohne Expansion Pak.
+Läuft auf PAL- und NTSC-Konsolen (640 × 480, Zeilensprung), ohne Expansion Pak. Nicht auf echter Hardware getestet.
+
+## Lizenzen der Grafiken
+
+Symbole: Lucide (ISC). Schrift: Roboto Flex (OFL). Emojis: Noto Color Emoji (OFL). Profilbilder stammen aus
+der Heini-App und stehen deshalb nicht im Repository.

@@ -227,3 +227,8 @@ int vsnprintf(char *p, size_t n, const char *f, va_list ap) {
 int snprintf(char *p, size_t n, const char *f, ...) {
     va_list a; va_start(a, f); int r = vsnprintf(p, n, f, a); va_end(a); return r;
 }
+size_t strspn(const char *s, const char *a) {
+    size_t n = 0;
+    while (s[n] && strchr(a, s[n])) n++;
+    return n;
+}

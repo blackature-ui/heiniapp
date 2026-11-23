@@ -36,7 +36,7 @@ build/heini-app-64.z64: build/heini-app-64.elf tools/mkrom.py tools/ipl3_prod.z6
 	$(PYTHON) tools/mkrom.py tools/ipl3_prod.z64 $< $@ "HEINI-APP 64"
 
 host: build/heini-host
-build/heini-host: $(HOST_SRC) $(wildcard src/*.h)
+build/heini-host: $(HOST_SRC) $(wildcard src/*.h) src/gen/assets_gen.h
 	@mkdir -p build
 	cc $(HOST_CFLAGS) -o $@ $(HOST_SRC) -lpng -lz
 
@@ -47,7 +47,7 @@ daten:
 	$(NODE) tools/export2c.js $(EXPORT) $(HEINI_PUBLIC) src/gen/data.c
 
 assets:
-	$(PYTHON) tools/make_assets.py $(HEINI_PUBLIC) src/gen/assets.c
+	$(PYTHON) tools/make_assets.py $(HEINI_PUBLIC) src/gen
 
 sim: build/n64sim
 build/n64sim: tools/n64sim.c

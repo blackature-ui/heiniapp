@@ -78,7 +78,7 @@ const char *weisheit_des_tages(tag_t t);
 const char *spruch_ueberzogen(int b);
 
 /* ---------- Ruhmeshalle ---------- */
-typedef struct { const char *titel, *erklaerung; uint8_t symbol; int profil; int32_t wert; char text[48]; } Rekord;
+typedef struct { const char *titel, *erklaerung, *emoji; int profil; int32_t wert; char text[48]; } Rekord;
 int rekorde(int t, Rekord *out, int max);  /* t = -1: ewige Bestenliste */
 int ruhm_treffen(void);
 void erfolge_pruefen(void);                /* neue Trophäen durch Bad, Alarm, Chat … vergeben */

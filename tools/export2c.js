@@ -20,40 +20,25 @@ const D = JSON.parse(fs.readFileSync(exportPfad, 'utf8'));
 const L = require(path.resolve(publicPfad, 'logik.js'));
 const R = require(path.resolve(publicPfad, 'rules.js'));
 
-// ---------- Text: UTF-8 → Latin-1 + Symbole (siehe src/text.h) ----------
-const SYMBOLE = {
-  '🚽': 0x81, '🧻': 0x82, '💩': 0x83, '🚿': 0x84, '🛁': 0x84, '😂': 0x85, '🤣': 0x85, '😄': 0x85, '😀': 0x85, '😁': 0x85,
-  '😆': 0x85, '😊': 0x85, '🙂': 0x85, '😅': 0x85, '😍': 0x86, '❤': 0x86, '♥': 0x86, '💛': 0x86, '💙': 0x86, '💚': 0x86,
-  '💜': 0x86, '🧡': 0x86, '🖤': 0x86, '💕': 0x86, '😘': 0x86, '🥰': 0x86, '👍': 0x87, '👌': 0x87, '💪': 0x87, '👏': 0x87,
-  '🙌': 0x87, '👎': 0x88, '🍺': 0x89, '🍻': 0x89, '🍷': 0x89, '🥂': 0x89, '🍾': 0x89, '🥃': 0x89, '🍸': 0x89, '🍹': 0x89,
-  '🏆': 0x8A, '🥇': 0x8A, '🥈': 0x8A, '🥉': 0x8A, '🏅': 0x8A, '🎖': 0x8A, '🎮': 0x8B, '🕹': 0x8B, '👾': 0x8B, '🚗': 0x8C,
-  '🚙': 0x8C, '🚕': 0x8C, '🚌': 0x8C, '🚆': 0x8C, '🚲': 0x8C, '🛏': 0x8D, '😴': 0x8D, '💤': 0x8D, '👑': 0x8E, '⭐': 0x8F,
-  '🌟': 0x8F, '★': 0x8F, '✨': 0x8F, '💫': 0x8F, '✅': 0x90, '✔': 0x90, '✓': 0x90, '☑': 0x9B, '❌': 0x91, '✗': 0x91,
-  '✖': 0x91, '•': 0xB7, '▶': 0x93, '►': 0x93, '→': 0x93, '◀': 0x94, '←': 0x94, '▲': 0x95, '↑': 0x95, '▼': 0x96, '↓': 0x96,
-  '💡': 0x97, '📌': 0x98, '📍': 0x98, '🕒': 0x99, '⏱': 0x99, '⏰': 0x99, '⏳': 0x99, '⌛': 0x99, '📅': 0x99, '🗓': 0x99,
-  '📸': 0x9C, '📷': 0x9C, '🎵': 0x9D, '🎶': 0x9D, '🎤': 0x9D, '🎧': 0x9D, '🏠': 0x9E, '🏡': 0x9E, '🏰': 0x9E, '🏨': 0x9E,
-  '🚨': 0x9F, '🔔': 0x9F, '⚡': 0x8F, '🎯': 0x8F, '🎉': 0x8F, '🎊': 0x8F, '🎆': 0x8F, '🔥': 0x8F, '💯': 0x8F
-};
-const ERSATZ = { '„': '"', '“': '"', '”': '"', '‚': "'", '‘': "'", '’': "'", '–': '-', '—': '-', '−': '-', '…': '...',
-  ' ': ' ', ' ': ' ', ' ': ' ', '×': 'x', '€': '\x80', '·': '\xb7', '‐': '-', '‑': '-', '«': '"', '»': '"' };
-
+// ---------- Text: UTF-8 bleibt UTF-8; Emojis bleiben Emojis (die ROM zeichnet sie mit Noto Color Emoji) ----------
+const ERSATZ = { ' ': ' ', ' ': ' ', ' ': ' ' };
+const EMOJI_SET = new Set();
+const istEmoji = cp => cp >= 0x1f000 || (cp >= 0x2190 && cp <= 0x2bff) || cp === 0x00a9 || cp === 0x00ae || (cp >= 0x3030 && cp <= 0x303d);
 function kodiere(s) {
   if (s === null || s === undefined) return '';
   const out = [];
-  for (const ch of Array.from(String(s))) {
-    const cp = ch.codePointAt(0);
-    if (cp === 0xfe0f || cp === 0xfe0e || cp === 0x200d || (cp >= 0x1f3fb && cp <= 0x1f3ff)) continue;  // Varianten, ZWJ, Hautfarben
+  const z = Array.from(String(s));
+  for (let i = 0; i < z.length; i++) {
+    const ch = z[i], cp = ch.codePointAt(0);
+    if (cp === 0xfe0f || cp === 0xfe0e || (cp >= 0x1f3fb && cp <= 0x1f3ff) || cp === 0x20e3) continue;   // Varianten, Hautfarben
+    if (cp === 0x200d) { i++; continue; }                                                               // ZWJ-Folgen: nur das erste Emoji
     if (cp >= 0x1f1e6 && cp <= 0x1f1ff) { out.push(String.fromCharCode(65 + cp - 0x1f1e6)); continue; } // Flaggen → Buchstaben
-    if (SYMBOLE[ch] !== undefined) { out.push(String.fromCharCode(SYMBOLE[ch])); continue; }
     if (ERSATZ[ch] !== undefined) { out.push(ERSATZ[ch]); continue; }
     if (cp === 10) { out.push('\n'); continue; }
-    if (cp < 32) continue;
-    if (cp < 127) { out.push(ch); continue; }
-    if (cp >= 0xa0 && cp <= 0xff) { out.push(ch); continue; }
-    if (cp >= 0x1f000 || (cp >= 0x2600 && cp <= 0x27bf) || (cp >= 0x2b00 && cp <= 0x2bff)) { out.push('\x8f'); continue; } // anderes Emoji
-    out.push('?');
+    if (cp < 32 || (cp >= 0x80 && cp < 0xa0)) continue;   // 0x80–0x9F sind Symbole der ROM
+    if (istEmoji(cp)) EMOJI_SET.add(cp);
+    out.push(ch);
   }
-  // doppelte Leerzeichen vom Weglassen zusammenziehen
   return out.join('').replace(/ {2,}/g, ' ');
 }
 function cstr(s) {
@@ -72,7 +57,6 @@ function cstr(s) {
   }
   return o + '"';
 }
-const symbolVon = (emoji, ersatz) => { const k = kodiere(emoji || ''); return k.length && k.charCodeAt(0) >= 0x80 ? k.charCodeAt(0) : ersatz; };
 
 // ---------- Zeit ----------
 const BASIS = Date.UTC(2020, 0, 1);
@@ -163,6 +147,7 @@ out(' * App-Version ' + D.app_version + ', Schema ' + D.schema_version + ', Date
 out('#include <stdlib.h>');
 out('#include <string.h>');
 out('#include "../model.h"');
+out('#include "../assets.h"');
 out('');
 
 // Feste Listen
@@ -179,12 +164,13 @@ R.KONSOLEN.forEach(k => out(`  {${cstr(k[0])}, ${cstr(k[1])}, ${cstr(k[2])}, ${f
 out('};');
 out('const int KONSOLEN_N = ' + R.KONSOLEN.length + ';');
 out('const ErfolgArt ERFOLGE[] = {');
-ACHS.forEach(a => out(`  {${cstr(a.code)}, ${cstr(a.name)}, ${cstr(a.hinweis)}, 0x${symbolVon(a.emoji, 0x8f).toString(16)}, '${a.art}', ${a.geheim ? 1 : 0}},`));
+ACHS.forEach(a => out(`  {${cstr(a.code)}, ${cstr(a.name)}, ${cstr(a.hinweis)}, ${cstr(a.emoji)}, '${a.art}', ${a.geheim ? 1 : 0}},`));
 out('};');
 out('const int ERFOLGE_N = ' + ACHS.length + ';');
 const ARTEN = R.WERTE.ausgabeArten;
 out('const AusgabeArt AUSGABE_ARTEN[] = {');
-ARTEN.forEach(a => { const x = L.AUSGABE_ART[a] || {}; out(`  {${cstr(a)}, ${cstr(x.text || a)}, ${cstr(x.satz || '')}, 0x${symbolVon(x.emoji, 0x80).toString(16)}},`); });
+const icId = n => 'IC_' + String(n || 'package').replace(/[^A-Za-z0-9]/g, '_').toUpperCase();
+ARTEN.forEach(a => { const x = L.AUSGABE_ART[a] || {}; out(`  {${cstr(a)}, ${cstr(x.text || a)}, ${cstr(x.satz || '')}, ${cstr(x.emoji || '')}, ${icId(x.icon)}},`); });
 out('};');
 out('const int AUSGABE_ARTEN_N = ' + ARTEN.length + ';');
 const liste = (name, arr) => { out(`const char *const ${name}[] = {`); arr.forEach(s => out('  ' + cstr(s) + ',')); out('};'); out(`const int ${name}_N = ${arr.length};`); };
@@ -192,7 +178,7 @@ liste('WEISHEITEN', L.WEISHEITEN);
 liste('SPRUECHE_UEBERZOGEN', L.SPRUECHE_UEBERZOGEN);
 liste('HEINAI_SPRUECHE', L.HEINAI_SPRUECHE || []);
 liste('HEINI_NAMEN', namen);
-out('const uint8_t EMOJIS[] = {' + EMOJIS.map(e => '0x' + symbolVon(e, 0x8f).toString(16)).join(', ') + '};');
+out('const char *const EMOJIS[] = {' + EMOJIS.map(cstr).join(', ') + '};');
 out('const int EMOJIS_N = ' + EMOJIS.length + ';');
 out('const char *const MEDIEN_ARTEN[] = {"YouTube", "Spotify", "Link", "Idee", "Bucketliste"};');
 const ein = k => { const e = lebend('einstellungen').find(x => x.schluessel === k); return e ? e.wert : null; };
@@ -259,6 +245,7 @@ emit('Umfrage', 'umfragen', umfragen, u => {
 emit('Stimme', 'stimmen', stimmen, s => `${ix('umfragen', s.umfrage_id)}, ${ix('profile', s.profil_id)}, ${json(s.wahl, []).reduce((m, i) => m | (1 << i), 0)}`);
 emit('Reaktion', 'reaktionen', reaktionen, r => {
   let e = EMOJIS.findIndex(x => kodiere(x) === kodiere(r.emoji));
+  if (e < 0) { const k = kodiere(r.emoji); if (k) EMOJI_SET.add(k.codePointAt(0)); }
   return `${ix('nachrichten', r.nachricht_id)}, ${ix('profile', r.profil_id)}, ${e < 0 ? 5 : e}`;
 });
 emit('Erfolg', 'erfolge', erfolge, a => `${ix('profile', a.profil_id)}, ${ACHS.findIndex(x => x.code === a.code)}, ${ix('treffen', a.treffen_id)}, ${zeit(a.erreicht_am)}, 0`);
@@ -279,12 +266,14 @@ emit('Frueher', 'frueher', frueher, f => {
   const g = gastgeberNamen(f);
   return `${f.nr}, ${f.tage || 0}, ${m ? +m[1] * 100 + +m[2] : 0}, ${cstr(f.name)}, ${g.length ? namen.indexOf(g[0]) : -1}, ${g.length > 1 ? namen.indexOf(g[1]) : -1}, ${t}u`;
 });
-emit('Medium', 'medien', medien, m => `${Math.max(0, R.WERTE.medienArten.indexOf(m.art))}, 0x${symbolVon(m.symbol, 0).toString(16)}, 0, ${ix('profile', m.profil_id)}, ${ix('profile', m.gastgeber_id)}, ${m.pos || 0}, ${zeit(m.erledigt_um)}, ${cstr(m.titel || '')}, ${cstr(m.adresse || '')}`);
+emit('Medium', 'medien', medien, m => `${Math.max(0, R.WERTE.medienArten.indexOf(m.art))}, ${cstr(m.symbol || '')}, 0, ${ix('profile', m.profil_id)}, ${ix('profile', m.gastgeber_id)}, ${m.pos || 0}, ${zeit(m.erledigt_um)}, ${cstr(m.titel || '')}, ${cstr(m.adresse || '')}`);
 emit('Daumen', 'daumen', daumen, d => `${ix('medien', d.medien_id)}, ${ix('profile', d.profil_id)}, ${d.wert > 0 ? 1 : -1}`);
 emit('Agenda', 'agenda', agenda, a => `${ix('treffen', a.treffen_id)}, ${ix('profile', a.profil_id)}, ${tag(a.datum)}, ${minuten(a.uhrzeit)}, ${cstr(a.name)}, ${cstr(a.notiz || '')}, 0`);
 emit('Kommentar', 'kommentare', kommentare, k => `${ix('treffen', k.treffen_id)}, ${ix('profile', k.profil_id)}, ${ja(k.angepinnt)}, 0, ${idZeit(k.id)}, ${cstr(k.text)}`);
 emit('Trip', 'trips', trips, t => `${ix('treffen', t.treffen_id)}, ${ix('profile', t.profil_id)}, ${tag(t.datum)}, ${minuten(t.uhrzeit)}, ${cstr(t.titel || '')}, ${cstr(t.wann || '')}`);
 emit('Fahrt', 'fahrten', fahrten, f => `${ix('treffen', f.treffen_id)}, ${ix('trips', f.trip_id)}, ${ix('profile', f.profil_id)}, ${f.plaetze || 1}, ${f.richtung === 'rueck' ? 1 : 0}, 0`);
+const tempE = lebend('temperatur_erledigt').filter(z => ix('treffen', z.treffen_id) >= 0 && ix('raeume', z.raum_id) >= 0);
+emit('Temperatur', 'temperatur', tempE, z => `${ix('treffen', z.treffen_id)}, ${ix('raeume', z.raum_id)}, ${tag(z.nacht)}, ${z.temp || 0}`);
 emit('Mitfahrer', 'mitfahrer', mitfahrer, m => `${ix('fahrten', m.fahrt_id)}, ${ix('profile', m.profil_id)}, 0`);
 
 out('');
@@ -294,6 +283,8 @@ out('void daten_laden(void) {');
 for (const [feld, n] of tabellen) if (n) out(`  LADE(${feld}, G_${feld});`);
 out('}');
 fs.writeFileSync(ausgabePfad, zeilen.join('\n') + '\n');
+EMOJIS.forEach(kodiere); ACHS.forEach(a => kodiere(a.emoji)); Object.values(L.AUSGABE_ART).forEach(x => kodiere(x.emoji));
+fs.writeFileSync(path.join(path.dirname(ausgabePfad), 'emoji.txt'), [...EMOJI_SET].sort((a, b) => a - b).map(x => x.toString(16)).join('\n') + '\n');
 
 // Prüfwerte für den Selbsttest (tools/pruefwerte.json): Kasse je Treffen nach logik.js
 const pruef = { treffen: [] };

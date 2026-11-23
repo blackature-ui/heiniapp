@@ -10,6 +10,7 @@ Datenbank db;
 zeit_t jetzt;
 int ich = -1;
 int regel_dauer_bad = 15, regel_verschleiss = 1, regel_verschleiss_ct = 5;
+int design_dunkel = 1;
 
 void *tabelle_platz(void *v, int *cap, int n, size_t gross) {
     if (n <= *cap) return v;
@@ -25,14 +26,14 @@ static inline tag_t heute(void) { return tag_von(jetzt); }
 
 /* ---------- Profile ---------- */
 const char *pname(int p) { return p >= 0 && p < db.profile.n ? db.profile.v[p].name : "Jemand"; }
-uint16_t pfarbe(int p) { return p >= 0 && p < db.profile.n ? FARBEN[db.profile.v[p].farbe].farbe : C_FLAECHE2; }
+uint16_t pfarbe(int p) { return p >= 0 && p < db.profile.n ? FARBEN[db.profile.v[p].farbe].farbe : TH->flaeche2; }
 int phell(int p) { return p >= 0 && p < db.profile.n ? FARBEN[db.profile.v[p].farbe].hell : 0; }
 int profil_aktiv(int p) { return p >= 0 && p < db.profile.n && db.profile.v[p].aktiv; }
 
 static const Paar *bestaetigtes_paar(int p) {
     for (int i = 0; i < db.paare.n; i++) {
         const Paar *x = &db.paare.v[i];
-        if (x->status == PAAR_BESTAETIGT && (x->von == p || x->zu == p)) return x;
+        if (!x->weg && x->status == PAAR_BESTAETIGT && (x->von == p || x->zu == p)) return x;
     }
     return NULL;
 }
@@ -134,6 +135,7 @@ int raum_im_treffen(int r, int t) {
     if (r < 0 || t < 0) return 0;
     const Raum *x = &db.raeume.v[r];
     const Treffen *y = &db.treffen.v[t];
+    if (x->weg) return 0;
     if (y->gastgeber >= 0) return x->profil == raum_besitzer(y->gastgeber) && x->treffen < 0;
     return x->treffen == t;
 }
@@ -501,7 +503,7 @@ int ruhm_treffen(void) {
 int rekorde(int t, Rekord *out, int max) {
     int n = 0, nb = besuche(besuch_puffer, 1024, t);
     Besuch *bs = besuch_puffer;
-    #define ADD(TI, ER, SYM, P, W, ...) do { if ((P) >= 0 && n < max) { Rekord *r = &out[n++]; r->titel = TI; r->erklaerung = ER; r->symbol = SYM; r->profil = P; r->wert = W; snprintf(r->text, sizeof r->text, __VA_ARGS__); } } while (0)
+    #define ADD(TI, ER, SYM, P, W, ...) do { if ((P) >= 0 && n < max) { Rekord *r = &out[n++]; r->titel = TI; r->erklaerung = ER; r->emoji = SYM; r->profil = P; r->wert = W; snprintf(r->text, sizeof r->text, __VA_ARGS__); } } while (0)
     /* Bad-König: meiste Besuche, bei Gleichstand wer die Zahl zuerst erreichte (Besuche sind nach Zeit sortiert genug) */
     {
         int cnt[MAX_PROFILE] = {0}; zeit_t wann[MAX_PROFILE] = {0};
@@ -511,23 +513,23 @@ int rekorde(int t, Rekord *out, int max) {
         for (int i = 0; i < nb; i++) { int p = bs[ord[i]].profil; if (p < 0) continue; cnt[p]++; wann[p] = bs[ord[i]].start; }
         int best = -1;
         for (int p = 0; p < MAX_PROFILE; p++) if (cnt[p] && (best < 0 || cnt[p] > cnt[best] || (cnt[p] == cnt[best] && wann[p] < wann[best]))) best = p;
-        if (best >= 0) ADD("Bad-König", "Die meisten Bad-Besuche.", 0x8e, best, cnt[best], cnt[best] == 1 ? "1 Bad-Besuch" : "%d Bad-Besuche", (int)cnt[best]);
+        if (best >= 0) ADD("Bad-König", "Die meisten Bad-Besuche.", "👑", best, cnt[best], cnt[best] == 1 ? "1 Bad-Besuch" : "%d Bad-Besuche", (int)cnt[best]);
     }
     int bi = -1, bw = 0;
     for (int i = 0; i < nb; i++) { int m = minute_von(bs[i].start); if (m < 240) continue; if (bi < 0 || m < bw || (m == bw && bs[i].start < bs[bi].start)) { bi = i; bw = m; } }
-    if (bi >= 0) ADD("Frühaufsteher", "Der früheste Bad-Besuch ab 4:00 Uhr.", 0x8f, bs[bi].profil, bw, "Bad um %s", uhrzeit_hm(bs[bi].start));
+    if (bi >= 0) ADD("Frühaufsteher", "Der früheste Bad-Besuch ab 4:00 Uhr.", "🌅", bs[bi].profil, bw, "Bad um %s", uhrzeit_hm(bs[bi].start));
     bi = -1;
     for (int i = 0; i < nb; i++) { int m = minute_von(bs[i].start); if (m < 240) m += 1440; if (bi < 0 || m > bw || (m == bw && bs[i].start < bs[bi].start)) { bi = i; bw = m; } }
-    if (bi >= 0) ADD("Nachteule", "Der späteste Bad-Besuch, nach Mitternacht bis 4:00 zählt als besonders spät.", 0x8f, bs[bi].profil, bw, "Bad um %s", uhrzeit_hm(bs[bi].start));
+    if (bi >= 0) ADD("Nachteule", "Der späteste Bad-Besuch, nach Mitternacht bis 4:00 zählt als besonders spät.", "🦉", bs[bi].profil, bw, "Bad um %s", uhrzeit_hm(bs[bi].start));
     bi = -1;
     for (int i = 0; i < nb; i++) { int d = ist_dauer(&bs[i]); if (d < 0) continue; if (bi < 0 || d < bw || (d == bw && bs[i].start < bs[bi].start)) { bi = i; bw = d; } }
-    if (bi >= 0) ADD("Schnellster Besuch", "Der kürzeste gemessene Bad-Besuch von „Rein“ bis „Bad jetzt freigeben“.", 0x8f, bs[bi].profil, bw, bw == 1 ? "1 Minute" : "%d Minuten", (int)bw);
+    if (bi >= 0) ADD("Schnellster Besuch", "Der kürzeste gemessene Bad-Besuch von „Rein“ bis „Bad jetzt freigeben“.", "⚡", bs[bi].profil, bw, bw == 1 ? "1 Minute" : "%d Minuten", (int)bw);
     bi = -1;
     for (int i = 0; i < nb; i++) { int d = ist_dauer(&bs[i]); if (d < 0) continue; if (bi < 0 || d > bw || (d == bw && bs[i].start < bs[bi].start)) { bi = i; bw = d; } }
-    if (bi >= 0) ADD("Längste Sitzung", "Der längste gemessene Bad-Besuch.", 0x99, bs[bi].profil, bw, "%d Minuten im Bad", (int)bw);
+    if (bi >= 0) ADD("Längste Sitzung", "Der längste gemessene Bad-Besuch.", "🐌", bs[bi].profil, bw, "%d Minuten im Bad", (int)bw);
     bi = -1;
     for (int i = 0; i < nb; i++) { int u = ueberzogen(&bs[i]); if (u <= 0) continue; if (bi < 0 || u > bw || (u == bw && bs[i].start < bs[bi].start)) { bi = i; bw = u; } }
-    if (bi >= 0) ADD("Größter Überzieher", "Am weitesten über das geplante Ende hinaus im Bad.", 0x99, bs[bi].profil, bw, bw == 1 ? "1 Minute drüber" : "%d Minuten drüber", (int)bw);
+    if (bi >= 0) ADD("Größter Überzieher", "Am weitesten über das geplante Ende hinaus im Bad.", "⏰", bs[bi].profil, bw, bw == 1 ? "1 Minute drüber" : "%d Minuten drüber", (int)bw);
     {
         int cnt[MAX_PROFILE] = {0}; zeit_t wann[MAX_PROFILE] = {0};
         for (int i = 0; i < db.alarme.n; i++) {
@@ -537,7 +539,7 @@ int rekorde(int t, Rekord *out, int max) {
         }
         int best = -1;
         for (int p = 0; p < MAX_PROFILE; p++) if (cnt[p] && (best < 0 || cnt[p] > cnt[best] || (cnt[p] == cnt[best] && wann[p] < wann[best]))) best = p;
-        if (best >= 0) ADD("Klopapier-Retter", "Die meisten gebrachten Rollen bei Klopapier-Alarmen.", 0x82, best, cnt[best], cnt[best] == 1 ? "1 Rolle gebracht" : "%d Rollen gebracht", (int)cnt[best]);
+        if (best >= 0) ADD("Klopapier-Retter", "Die meisten gebrachten Rollen bei Klopapier-Alarmen.", "🧻", best, cnt[best], cnt[best] == 1 ? "1 Rolle gebracht" : "%d Rollen gebracht", (int)cnt[best]);
     }
     {
         int cnt[MAX_PROFILE] = {0}; zeit_t wann[MAX_PROFILE] = {0};
@@ -550,7 +552,7 @@ int rekorde(int t, Rekord *out, int max) {
         }
         int best = -1;
         for (int p = 0; p < MAX_PROFILE; p++) if (cnt[p] && (best < 0 || cnt[p] > cnt[best] || (cnt[p] == cnt[best] && wann[p] < wann[best]))) best = p;
-        if (best >= 0) ADD("Chat-Kanone", "Die meisten Nachrichten im Chat.", 0x85, best, cnt[best], cnt[best] == 1 ? "1 Nachricht" : "%d Nachrichten", (int)cnt[best]);
+        if (best >= 0) ADD("Chat-Kanone", "Die meisten Nachrichten im Chat.", "💬", best, cnt[best], cnt[best] == 1 ? "1 Nachricht" : "%d Nachrichten", (int)cnt[best]);
     }
     if (t < 0) {
         int cnt[MAX_PROFILE] = {0}; zeit_t wann[MAX_PROFILE] = {0};
@@ -561,7 +563,7 @@ int rekorde(int t, Rekord *out, int max) {
         }
         int best = -1;
         for (int p = 0; p < MAX_PROFILE; p++) if (cnt[p] && (best < 0 || cnt[p] > cnt[best] || (cnt[p] == cnt[best] && wann[p] < wann[best]))) best = p;
-        if (best >= 0) ADD("Meiste Treffen", "Bei den meisten Treffen in der App angekommen.", 0x8a, best, cnt[best], cnt[best] == 1 ? "1 Treffen" : "%d Treffen", (int)cnt[best]);
+        if (best >= 0) ADD("Meiste Treffen", "Bei den meisten Treffen in der App angekommen.", "🎟", best, cnt[best], cnt[best] == 1 ? "1 Treffen" : "%d Treffen", (int)cnt[best]);
     }
     #undef ADD
     return n;

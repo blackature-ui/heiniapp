@@ -39,14 +39,14 @@ typedef struct {
 } Profil;
 
 enum { RAUM_BAD = 0, RAUM_SCHLAF = 1 };
-typedef struct { int8_t profil; int16_t treffen; const char *name, *info; uint8_t art; int8_t reihenfolge; } Raum;
-typedef struct { int16_t raum; const char *name; uint8_t fuer_zwei; } Platz;
-typedef struct { int8_t profil; const char *name; uint8_t zaehlbar, anzahl; } Utensil;
+typedef struct { int8_t profil; int16_t treffen; const char *name, *info; uint8_t art; int8_t reihenfolge; uint8_t weg; } Raum;
+typedef struct { int16_t raum; const char *name; uint8_t fuer_zwei; uint8_t weg; } Platz;
+typedef struct { int8_t profil; const char *name; uint8_t zaehlbar, anzahl; uint8_t weg; } Utensil;
 
-typedef struct { int8_t profil; int16_t art; /* Index in KONSOLEN, -1 = andere */ const char *name; int16_t pos; } Konsole;
+typedef struct { int8_t profil; int16_t art; /* Index in KONSOLEN, -1 = andere */ const char *name; int16_t pos; uint8_t weg; } Konsole;
 enum { DING_SPIEL = 0, DING_ZUBEHOER = 1 };
-typedef struct { int16_t konsole; uint8_t art; const char *name; uint8_t anzahl; } KonsolenDing;
-typedef struct { int8_t profil, von; int16_t jahr; const char *geschenk; } Wichtel;
+typedef struct { int16_t konsole; uint8_t art; const char *name; uint8_t anzahl; uint8_t weg; } KonsolenDing;
+typedef struct { int8_t profil, von; int16_t jahr; const char *geschenk; uint8_t weg; } Wichtel;
 
 typedef struct {
     const char *titel, *adresse, *info;
@@ -87,7 +87,7 @@ typedef struct { int16_t nachricht; int8_t profil; uint8_t emoji; /* Index in EM
 
 typedef struct { int8_t profil; int16_t code; int16_t treffen; zeit_t erreicht; uint8_t neu; } Erfolg;
 enum { PAAR_OFFEN = 0, PAAR_BESTAETIGT = 1 };
-typedef struct { int8_t von, zu, wohnen_von; uint8_t status; } Paar;
+typedef struct { int8_t von, zu, wohnen_von; uint8_t status; uint8_t weg; int8_t wohnen_durch; zeit_t wohnen_um; } Paar;
 
 typedef struct {
     int16_t treffen, trip; int8_t profil, eingetragen_von;
@@ -107,20 +107,23 @@ typedef struct { int16_t treffen; int8_t von, an; int32_t betrag; uint8_t status
 typedef struct { int16_t nr, tage; int32_t monat; /* JJJJMM */ const char *name; int8_t gastgeber, gastgeber2; /* Heini-Namen */ uint32_t teilnehmer; /* Bitmaske HEINI_NAMEN */ } Frueher;
 
 enum { MED_YOUTUBE = 0, MED_SPOTIFY, MED_LINK, MED_IDEE, MED_BUCKET };
-typedef struct { uint8_t art, symbol, geloescht; int8_t profil, gastgeber; int16_t pos; zeit_t erledigt_um; const char *titel, *adresse; } Medium;
+typedef struct { uint8_t art; const char *symbol; uint8_t geloescht; int8_t profil, gastgeber; int16_t pos; zeit_t erledigt_um; const char *titel, *adresse; } Medium;
 typedef struct { int16_t medium; int8_t profil; int8_t wert; } Daumen;
 typedef struct { int16_t treffen; int8_t profil; tag_t datum; int16_t uhrzeit; /* Minuten, -1 = keine */ const char *name, *notiz; uint8_t geloescht; } Agenda;
 typedef struct { int16_t treffen; int8_t profil; uint8_t angepinnt, geloescht; zeit_t zeit; const char *text; } Kommentar;
-typedef struct { int16_t treffen; int8_t profil; tag_t datum; int16_t uhrzeit; const char *titel, *wann; } Trip;
+typedef struct { int16_t treffen; int8_t profil; tag_t datum; int16_t uhrzeit; const char *titel, *wann; uint8_t geloescht; } Trip;
 enum { RICHTUNG_HIN = 0, RICHTUNG_RUECK = 1 };
 typedef struct { int16_t treffen, trip; int8_t profil; uint8_t plaetze, richtung, geloescht; } Fahrt;
 typedef struct { int16_t fahrt; int8_t profil; uint8_t geloescht; } Mitfahrer;
 
+typedef struct { int16_t treffen, raum; tag_t nacht; int8_t temp; } Temperatur;
+typedef struct { int8_t profil; uint8_t typ; zeit_t zeit; const char *text; } Verlauf;
+
 /* ---------- Konstanten aus rules.js / logik.js (gen/data.c) ---------- */
 typedef struct { const char *schluessel, *name; uint16_t farbe; uint8_t hell; } Farbe;     /* hell = dunkle Schrift */
 typedef struct { const char *schluessel, *name, *kurz; uint16_t farbe; } KonsolenArt;
-typedef struct { const char *code, *name, *hinweis; uint8_t symbol, art; /* 'T','U','H' */ uint8_t geheim; } ErfolgArt;
-typedef struct { const char *schluessel, *text, *satz; uint8_t symbol; } AusgabeArt;
+typedef struct { const char *code, *name, *hinweis, *emoji; uint8_t art; /* 'T','U','H' */ uint8_t geheim; } ErfolgArt;
+typedef struct { const char *schluessel, *text, *satz, *emoji; int16_t icon; } AusgabeArt;
 
 extern const Farbe FARBEN[]; extern const int FARBEN_N;
 extern const KonsolenArt KONSOLEN[]; extern const int KONSOLEN_N;
@@ -130,7 +133,7 @@ extern const char *const WEISHEITEN[]; extern const int WEISHEITEN_N;
 extern const char *const SPRUECHE_UEBERZOGEN[]; extern const int SPRUECHE_UEBERZOGEN_N;
 extern const char *const HEINAI_SPRUECHE[]; extern const int HEINAI_SPRUECHE_N;
 extern const char *const HEINI_NAMEN[]; extern const int HEINI_NAMEN_N;
-extern const uint8_t EMOJIS[]; extern const int EMOJIS_N;   /* Reaktions-Symbole (Zeichen-Codes) */
+extern const char *const EMOJIS[]; extern const int EMOJIS_N;   /* Reaktions-Emojis (UTF-8) */
 extern const char *const MEDIEN_ARTEN[]; /* Anzeigenamen */
 extern const char *const EXPORT_STAND;   /* z. B. "22.11.2026 21:50" */
 extern const uint32_t EXPORT_KENNUNG;    /* data_version des Exports */
@@ -153,12 +156,14 @@ typedef struct {
     TABELLE(Frueher) frueher; TABELLE(Medium) medien; TABELLE(Daumen) daumen;
     TABELLE(Agenda) agenda; TABELLE(Kommentar) kommentare;
     TABELLE(Trip) trips; TABELLE(Fahrt) fahrten; TABELLE(Mitfahrer) mitfahrer;
+    TABELLE(Temperatur) temperatur; TABELLE(Verlauf) verlauf;
 } Datenbank;
 
 extern Datenbank db;
 extern zeit_t jetzt;            /* aktuelle Ortszeit (Sekunden seit 2020) */
 extern int ich;                 /* gewähltes Profil */
 extern int regel_dauer_bad, regel_verschleiss, regel_verschleiss_ct;
+extern int design_dunkel;      /* Einstellung Hell/Dunkel (Gerät) */
 
 /* Grunddaten aus dem Export in db kopieren (gen/data.c) */
 void daten_laden(void);
