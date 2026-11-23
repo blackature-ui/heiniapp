@@ -1,0 +1,4 @@
+build/
+# Erzeugt aus dem privaten Export und dem App-Code: Namen, Adressen, PayPal, Chats, Profilbilder
+src/gen/
+*.json

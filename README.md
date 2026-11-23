@@ -1,0 +1,86 @@
+# Heini-App 64
+
+Die Heini-App (Version 1.61.0) als stationäre App für den Fernseher – portiert auf den **Nintendo 64**.
+Bad, Dusche, Klo, Schlafplatz und Leih-Utensilien beim Freundestreffen, dazu Chat, Klopapier-Alarm,
+Kasse und Ruhmeshalle. Profile wählt man vor dem Start im Hauptmenü.
+
+## So funktioniert es
+
+- **Grunddaten aus dem JSON-Export** der Heini-App landen fest im ROM (`src/gen/data.c`, wird erzeugt).
+- **Alles, was am Fernseher passiert** (Ankunft, „Rein“, Freigeben, Klopapier-Alarm, Zusagen, Schlafplätze,
+  Ausleihen, Chat, Umfragen, Reaktionen, Ausgaben, Kasse schließen, Zahlungen, Agenda, Kommentare, Ideen, Daumen …)
+  wird als Aktion geprüft, ausgeführt und in ein **Journal im SRAM** (32 KB, batteriegepuffert) geschrieben.
+  Beim Einschalten wird das Journal erneut ausgeführt. Kommt ein neuer Export ins ROM, beginnt das Journal leer.
+- Die Regeln stammen aus `logik.js`, `rules.js` und den Abläufen in `server.js` der Web-App (Texte wörtlich).
+  Die Kasse rechnet centgenau wie das Original (`make test` prüft gegen Werte, die `logik.js` selbst ausrechnet).
+- **Uhr:** Hat das Modul eine Echtzeituhr (z. B. EverDrive 64 X7, SummerCart64), wird sie gelesen. Sonst
+  im Hauptmenü einmal „Uhr stellen“; die Zeit läuft dann bis zum Ausschalten weiter.
+
+## Bedienung (Controller)
+
+| Taste | Wirkung |
+| --- | --- |
+| Steuerkreuz / Analogstick | Fokus bewegen |
+| A | wählen, Knopf drücken |
+| B | zurück |
+| L / R | Reiter wechseln (Heute · Plan · Kasse · Treffen · Ideen) |
+| Z | Chat öffnen bzw. Nachricht schreiben |
+| START | Menü (Chat, Ruhmeshalle, Wer ist da?, Mein Profil, Einstellungen, Profil wechseln) |
+| C-hoch / C-runter | schnell rollen |
+
+Bildschirmtastatur: A tippen, B löschen, Z groß, L Symbole/Emojis, R Leerzeichen, START fertig.
+
+## Was geht, was nicht
+
+Portiert: Hauptmenü mit Profilwahl, Heute (Klo-Weisheit, laufende Uhr mit Ring, „Rein“, Warteschlange,
+„Als Pärchen“, „Dauert länger“, Klopapier-Alarm als Vollbild, Ankunft und Einchecken, Dein Tag, Kasse kurz,
+Offenes, Nach dem Treffen), Plan (Zeitleiste je Bad und Tag), Kasse & Trips (Ausgaben eintragen und löschen,
+Stände, Direktzahlungen, Kasse schließen/öffnen, Zahlungen melden/bestätigen, Trips und Autos ansehen),
+Treffen (Liste, Detail, Zusagen, Agenda, Kommentare, Schlafplätze je Nacht, Utensilien, Bäder, Gold, Treffen
+verlassen und beenden), Aktivitäten & Ideen (Daumen, erledigt, neue Ideen und Bucketliste), Chat (Verlauf,
+schreiben, antworten, reagieren, anheften, löschen, Umfragen starten/abstimmen/beenden), Ruhmeshalle (Rekorde
+des Treffens, ewige Bestenliste, Trophäenschrank, neue Trophäen nach dem Export), Profile, Wer ist da?,
+Frühere Treffen mit Statistik, Einstellungen (Uhr, Bad-Regel, Speicher).
+
+Nicht möglich ohne Internet: Abgleich mit dem Pi, Push, HeinAI, Spielesuche, YouTube-Vorschauen, Fotos,
+GIFs und Sprachnachrichten (im Chat steht nur „1 Foto (nur in der App)“), OneDrive-Links öffnen.
+
+Noch nicht portiert: Treffen anlegen und bearbeiten, Profile bearbeiten (außer Status), Räume, Plätze, Utensilien,
+Konsolen, Spiele und Wichtel verwalten, Pärchen anfragen und „Wir wohnen zusammen“ umschalten, Trips und Autos
+anlegen und Fahrtkosten abrechnen, Essensbestellung mit Einzelbeträgen, Bad-Besuch nachträglich bearbeiten,
+Wunschtemperatur-Todos, Erinnerungen, Änderungsverlauf, Feedback, Tour, Teilen als Bild.
+Änderungen am Fernseher fließen nicht zurück in die Web-App.
+
+## Bauen
+
+Benötigt: `clang` und `ld.lld` (LLVM ≥ 15, mit MIPS-Ziel), `python3` mit Pillow, `node` (≥ 20) und den
+Programmcode der Heini-App (Ordner `public/` mit `logik.js`, `rules.js`, Profilbildern und Logo).
+
+```sh
+make daten EXPORT=heini-app-export.json HEINI_PUBLIC=../heini-app/public   # src/gen/data.c + Prüfwerte
+make assets HEINI_PUBLIC=../heini-app/public                                # src/gen/assets.c (Schrift, Bilder)
+make test          # Selbsttest der Kasse und Weisheit gegen logik.js (PC)
+make               # build/heini-app-64.z64
+```
+
+`src/gen/` steht absichtlich nicht im Repository: dort landen Namen, Adressen, PayPal-Namen und Chats aus
+dem Export sowie die Profilbilder.
+
+Die ROM nutzt **keine libdragon-Bibliothek**, nur deren offenen IPL3-Bootcode (`tools/ipl3_prod.z64`,
+Public Domain). VI, SI/PIF, PI und COP0 werden in `src/n64/` direkt angesprochen; `src/n64/libc.c` ist eine
+kleine C-Bibliothek. Code ist MIPS II (läuft auf der VR4300), ohne Gleitkomma.
+
+## Testen ohne Konsole
+
+- `make host` baut dieselbe App für den PC: `build/heini-host --skript "warte:85 a shot:heute R shot:plan"`
+  rendert Bilder nach `build/shots/` (Wörter siehe `src/host/plat_host.c`).
+- `make sim` baut `tools/n64sim.c`, einen kleinen Befehlssimulator, der das echte N64-ELF ausführt
+  (MIPS-Kern, VI-Interrupt, PI/SRAM, SI/PIF-Controller) und den Bildpuffer als PNG speichert:
+  `build/n64sim build/heini-app-64.elf "warte:120 shot:hauptmenue a warte:10 shot:heute"`.
+  Er ersetzt keinen Emulator und keine echte Konsole.
+
+## Auf die Konsole
+
+`build/heini-app-64.z64` auf ein Flashcart (EverDrive 64, SummerCart64 …) kopieren. Der ROM-Kopf meldet
+„SRAM 256 kbit + Echtzeituhr“ (erweiterter Homebrew-Kopf); falls das Flashcart fragt: Speichertyp SRAM 32 KB.
+Läuft auf PAL- und NTSC-Konsolen (640 × 480, Zeilensprung), ohne Expansion Pak.
