@@ -275,7 +275,7 @@ int main(int argc, char **argv) {
                 if (!strncmp(w, "shot:", 5)) { png(w + 5); continue; }
                 if (!strncmp(w, "warte:", 6)) { warte = atoi(w + 6) - 1; break; }
                 static const struct { const char *n; uint16_t t; } K[] = { {"a", 0x8000}, {"b", 0x4000}, {"z", 0x2000}, {"start", 0x1000}, {"hoch", 0x0800},
-                    {"runter", 0x0400}, {"links", 0x0200}, {"rechts", 0x0100}, {"L", 0x0020}, {"R", 0x0010}, {"-", 0} };
+                    {"runter", 0x0400}, {"links", 0x0200}, {"rechts", 0x0100}, {"L", 0x0020}, {"R", 0x0010}, {"ch", 0x0008}, {"cu", 0x0004}, {"cl", 0x0002}, {"cr", 0x0001}, {"-", 0} };
                 for (unsigned k = 0; k < sizeof K / sizeof K[0]; k++) if (!strcmp(w, K[k].n)) tasten = K[k].t;
                 halte = 5;   /* wie ein Mensch: Taste etwa 120 ms gedrückt */
                 break;

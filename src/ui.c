@@ -29,6 +29,7 @@ uint32_t ui_taste(void) { return taste; }
 int ui_dialog_offen(void) { return dlg_typ != 0; }
 static int seite_gewechselt, roll_halten;
 void ui_roll_auf(int y) { roll = y < 0 ? 0 : y; roll_halten = 1; }
+void ui_nochmal(void) { nochmal = 1; }
 void ui_seite_neu(void) { fokus = -1; roll = 0; n_alt = 0; memset(karten_h, 0, sizeof karten_h); seite_gewechselt = 1; }
 static int sy(int y) { return ber_y0 + y - roll; }
 static int elem_y(const Elem *e) { return e->fest ? e->y : ber_y0 + e->y - roll; }

@@ -9,11 +9,15 @@ void seite_chat(void) {
     int chat_auswahl = -1;
     for (int i = 0; i < db.nachrichten.n; i++) {
         const Nachricht *m = &db.nachrichten.v[i];
-        if (!m->geloescht && m->angeheftet) ui_symbolzeile(IC_PIN, tmp("%s: %s", pname(m->profil), m->text), TH->accentText);
+        if (!m->geloescht && m->angeheftet) ui_symbolzeile(IC_PIN, tmp("%s: %s", pname(m->profil), m->text && m->text[0] ? m->text : m->medium == MEDIUM_AUDIO ? "Sprachnachricht" : m->medium == MEDIUM_GIF ? "GIF" : m->medien_anzahl > 1 ? tmp("%d Fotos", m->medien_anzahl) : "Foto"), TH->accentText);
     }
     tag_t letzter = -1;
-    int ab = db.nachrichten.n > 100 ? db.nachrichten.n - 100 : 0;
-    if (ab > 0) ui_text("Ältere Nachrichten sind ausgeblendet (die letzten 100).", F_KLEIN, TH->muted);
+    /* ganzer Verlauf: zuerst die letzten 60, darüber „Ältere laden“ in Schritten von 60 bis zur ersten Nachricht */
+    static int chat_zeigen = 60;
+    int ab = db.nachrichten.n > chat_zeigen ? db.nachrichten.n - chat_zeigen : 0;
+    if (ab > 0) {
+        if (ui_knopf_breit(tmp("Ältere Nachrichten laden (%d)", ab), KN_RAND, IC_CHEVRON_UP)) { chat_zeigen += 60; ui_roll_auf(0); ui_nochmal(); }
+    } else if (db.nachrichten.n) ui_text(tmp("Anfang des Chats · %d Nachrichten", db.nachrichten.n), F_KLEIN, TH->muted);
     for (int i = ab; i < db.nachrichten.n; i++) {
         const Nachricht *m = &db.nachrichten.v[i];
         if (m->geloescht) continue;

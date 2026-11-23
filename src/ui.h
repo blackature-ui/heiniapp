@@ -29,7 +29,8 @@ int ui_x(void);
 int ui_breite(void);
 void ui_abstand(int px);
 void ui_weiter(int dy);
-void ui_roll_auf(int inhalt_y);    /* einmal dorthin rollen (bis zur nächsten Taste) */
+void ui_roll_auf(int inhalt_y);
+void ui_nochmal(void);             /* gleich noch ein Bild zeichnen (Zustand hat sich beim Zeichnen geändert) */    /* einmal dorthin rollen (bis zur nächsten Taste) */
 
 /* Inhalte */
 void ui_ueberschrift(const char *s, const char *rechts);      /* Abschnitt mit Balken links */
