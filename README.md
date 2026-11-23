@@ -46,10 +46,13 @@ Kasse & Trips (Ausgaben, Essensbestellung mit Einzelbeträgen und Lieferkosten, 
 Kasse schließen/öffnen, Zahlungen, Trips und Autos anlegen, mitfahren, Fahrtkosten abrechnen),
 Treffen (anlegen, bearbeiten, absagen, beenden, Zusagen, Agenda, Kommentare, Schlafplätze je Nacht,
 Utensilien ausleihen, Bäder, Wunschtemperatur, Gold), Aktivitäten & Ideen, Chat (schreiben, antworten,
-reagieren, anheften, löschen, Umfragen), Ruhmeshalle, Profile ansehen und bearbeiten (Über dich, Adresse,
+reagieren, anheften, löschen, Umfragen), Ruhmeshalle, Profile ansehen wie im Original (Kopf in der Profilfarbe, Adresse, Gaming-Equipment als
+Konsolen-Kacheln mit Spielen und Zubehör, Auto, Startort, Pärchen, Getränke, Wunschtemperatur, Parkplätze, PayPal,
+Räume, Unverträglichkeiten und „Mag ich nicht“ als Chips, Verleiht, Wichtelgeschenke) und bearbeiten (Über dich, Adresse,
 Profilbild, Farbe, Gaming und Konsolen, Auto, Vorlieben, Pärchen anfragen/annehmen/lösen, „Wir wohnen
 zusammen“, Wichtel, Gastgeber mit Räumen, Plätzen, Parkplätzen und Utensilien), Wer ist da?, Frühere Treffen
-mit Statistik, Einstellungen (Design, Uhr, Regeln, Speicher), Änderungsverlauf, Tour.
+mit Statistik, alte Treffen-Aktivitäten (erledigt / nicht geklappt, mit Stimmen), Einstellungen (Design, Uhr,
+Regeln, Speicher), Änderungsverlauf, Tour.
 
 Nicht möglich ohne Internet: Abgleich mit dem Pi, Push und Erinnerungen, HeinAI, Spielesuche,
 YouTube-Vorschauen, Fotos, GIFs und Sprachnachrichten (im Chat steht nur „1 Foto (nur in der App)“),

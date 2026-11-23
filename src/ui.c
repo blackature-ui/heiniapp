@@ -318,6 +318,13 @@ int ui_eintrag_symbol(int symbol, const char *emoji, const char *titel, const ch
     cur_y += 62;
     return f && (taste & T_A);
 }
+void ui_info_symbol(int symbol, const char *titel, const char *unter) {   /* wie ui_eintrag_symbol, aber nicht anwählbar */
+    zeile_zeichnen(56, titel, unter, NULL, 0, cur_y);
+    int py = sy(cur_y);
+    gfx_kreis(x0 + 20, py + 29, 20, TH->flaeche2);
+    if (symbol >= 0) gfx_symbol(symbol, x0 + 10, py + 19, 20, TH->accentText);
+    cur_y += 62;
+}
 void ui_person(int p, const char *titel, const char *unter, const char *rechts) {
     zeile_zeichnen(56, titel, unter, rechts, 0, cur_y);
     avatar(p, x0, sy(cur_y) + 9, 40);

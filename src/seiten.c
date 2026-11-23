@@ -268,7 +268,7 @@ static void karte_offenes(void) {
     if (!n && !pz) return;
     ui_karte("Offenes für dich", IC_CLIPBOARD_LIST);
     if (n && ui_eintrag_symbol(IC_BAR_CHART, NULL, n == 1 ? "1 Umfrage wartet auf deine Stimme" : tmp("%d Umfragen warten auf deine Stimme", n), NULL, "›")) { chat_ende = 1; seite_auf(SE_CHAT, 0); }
-    if (pz && ui_eintrag_symbol(IC_HEART, NULL, "Jemand möchte mit dir ein Pärchen sein", "Im Profil antworten", "›")) seite_auf(SE_PROFIL, ich);
+    if (pz && ui_eintrag_symbol(IC_HEART, NULL, "Jemand möchte mit dir ein Pärchen sein", "Im Profil antworten", "›")) seite_auf(SE_PROFIL, ich + 1000);
     ui_karte_ende();
 }
 
@@ -347,6 +347,17 @@ static void seite_heute(void) {
             ui_karte(tmp("Nach dem Treffen · %s", treffen_titel(nach)), IC_TROPHY);
             Rekord r[12]; int nr = rekorde(nach, r, 12);
             for (int i = 0; i < nr && i < 4; i++) ui_person(r[i].profil, tmp("%s %s", r[i].emoji, r[i].titel), tmp("%s · %s", pname(r[i].profil), r[i].text), NULL);
+            {
+                static char ja[200], nein[200]; ja[0] = nein[0] = 0;
+                for (int i = 0; i < db.aktivitaeten.n; i++) {
+                    const Aktivitaet *a = &db.aktivitaeten.v[i];
+                    if (a->treffen != nach) continue;
+                    char *z = a->erledigt ? ja : nein;
+                    if (z[0]) strncat(z, ", ", sizeof ja - strlen(z) - 1);
+                    strncat(z, a->medium >= 0 ? db.medien.v[a->medium].titel : a->titel, sizeof ja - strlen(z) - 1);
+                }
+                if (ja[0] || nein[0]) ui_symbolzeile(IC_LIGHTBULB, tmp("%s%s%s%s%s", ja, ja[0] ? " erledigt" : "", ja[0] && nein[0] ? " · " : "", nein, nein[0] ? (strchr(nein, ',') ? " bleiben offen" : " bleibt offen") : ""), TH->muted);
+            }
             if (ONEDRIVE_LINK[0]) ui_symbolzeile(IC_CAMERA, tmp("Fotos und Videos: %s", ONEDRIVE_LINK), TH->muted);
             if (ui_knopf_art("Zur Ruhmeshalle", KN_TONAL, IC_TROPHY)) { ruhm_reiter = 0; seite_auf(SE_RUHM, 0); }
             ui_karte_ende();
@@ -742,6 +753,22 @@ static void seite_treffen(int t) {
     if (uhr_ergebnis(ID_AGENDA_ZEIT, &s)) { ag_zeit = minute_von(s); ag_tag = tag_von(s); tastatur(ID_AGENDA_TAG, "Was steht an?", "", 60); }
     const char *an = tastatur_ergebnis(ID_AGENDA_TAG);
     if (an && an[0]) { Aktion *a = aktion_neu(A_AGENDA); a->a = (int16_t)t; a->b = ag_tag; a->c = (int16_t)ag_zeit; strncpy(a->text, an, AKTION_TEXT_MAX); mach(a, NULL); }
+    /* alte Aktivitäten (vor 1.60.0): nur beendete Treffen zeigen sie, ohne Abstimmung und ohne Bearbeiten */
+    int nakt = 0;
+    for (int i = 0; i < db.aktivitaeten.n; i++) if (db.aktivitaeten.v[i].treffen == t) nakt++;
+    if (tr->beendet_um && nakt) {
+        ui_ueberschrift("Aktivitäten", tmp("%d", nakt));
+        ui_karte_art(KA_NORMAL, NULL, -1);
+        for (int i = 0; i < db.aktivitaeten.n; i++) {
+            const Aktivitaet *a = &db.aktivitaeten.v[i];
+            if (a->treffen != t) continue;
+            const Medium *md = a->medium >= 0 ? &db.medien.v[a->medium] : NULL;
+            const char *unter = md ? (md->art == MED_IDEE ? (md->gastgeber >= 0 ? tmp("Idee bei %s", pname(md->gastgeber)) : "Idee") : "Bucketliste")
+                                   : tmp("Freitext von %s", a->profil == ich ? "dir" : pname(a->profil));
+            ui_info_symbol(a->erledigt ? IC_CHECK : IC_X, md ? md->titel : a->titel, tmp("%s · %s%s", unter, a->erledigt ? "erledigt" : "nicht geklappt", a->stimmen ? tmp(" · %d %s", a->stimmen, a->stimmen == 1 ? "Stimme" : "Stimmen") : ""));
+        }
+        ui_karte_ende();
+    }
     int nk = 0;
     for (int i = 0; i < db.kommentare.n; i++) if (!db.kommentare.v[i].geloescht && db.kommentare.v[i].treffen == t) nk++;
     if (nk || st == T_KOMMEND) {
@@ -764,7 +791,7 @@ static void seite_treffen(int t) {
         const Raum *x = &db.raeume.v[r];
         int pl = 0; for (int p = 0; p < db.plaetze.n; p++) if (!db.plaetze.v[p].weg && db.plaetze.v[p].raum == r) pl++;
         const char *info = x->info ? x->info : "";
-        if (ui_eintrag_symbol(x->art == RAUM_BAD ? IC_BATH : IC_BED, NULL, x->name, x->art == RAUM_BAD ? (info[0] ? info : "Bad") : tmp("%d Schlafplätze%s%s", pl, info[0] ? " · " : "", info), info[0] ? "(i)" : NULL) && info[0]) meldung(info);
+        if (ui_eintrag_symbol(x->art == RAUM_BAD ? IC_BATH : IC_BED, NULL, x->name, x->art == RAUM_BAD ? (info[0] ? info : "Bad") : tmp("%d %s%s%s", pl, pl == 1 ? "Schlafplatz" : "Schlafplätze", info[0] ? " · " : "", info), info[0] ? "(i)" : NULL) && info[0]) meldung(info);
         nr++;
     }
     if (!nr) ui_text(tr->gastgeber >= 0 ? "Der Gastgeber hat noch keine Räume eingetragen." : "Noch keine Räume am Treffen.", F_NORMAL, TH->muted);

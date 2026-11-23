@@ -55,6 +55,8 @@ static int trip_abgerechnet(int trip, int fahrer) {
     return -1;
 }
 
+static int zeichen_n(const char *s, int bytes) { int n = 0; for (int i = 0; i < bytes; i++) if (((unsigned char)s[i] & 0xC0) != 0x80) n++; return n; }
+
 const char *ausfuehren2(Aktion *a) {
     int p = a->profil;
     char puf[AKTION_TEXT_MAX + 2]; char *t[8];
@@ -120,8 +122,29 @@ const char *ausfuehren2(Aktion *a) {
         case P_WUNSCH_TEMP: if (v && (v < 15 || v > 24)) return "Ganze Grad von 15 bis 24 °C oder egal."; x->wunsch_temp = (int8_t)v; break;
         case P_PARKPLAETZE: if (v < 0 || v > 20) return "0 bis 20 Parkplätze. Mehr passt in keine Einfahrt."; x->parkplaetze = (uint8_t)v; break;
         case P_PARK_HINWEIS: x->park_hinweis = text_kopie(t[0]); break;
-        case P_UNVERTRAEGLICH: x->unvertraeglich = text_kopie(t[0]); break;
-        case P_MAG_NICHT: x->mag_nicht = text_kopie(t[0]); break;
+        case P_UNVERTRAEGLICH: {
+            const char *q = t[0]; int n = 0;
+            while (*q) {
+                const char *e = strstr(q, " · "); int l = e ? (int)(e - q) : (int)strlen(q);
+                n++; if (zeichen_n(q, l) > 40) return "Höchstens 40 Zeichen je Eintrag.";
+                q += l; if (e) q += strlen(" · ");
+            }
+            if (n > 20) return "Höchstens 20 Einträge.";
+            x->unvertraeglich = text_kopie(t[0]); break;
+        }
+        case P_MAG_NICHT: {
+            /* wie RULES.essenFehler: höchstens 20 Einträge, je 40 Zeichen, keine doppelten */
+            const char *q = t[0]; int n = 0;
+            while (*q) {
+                const char *e = strstr(q, " · "); int l = e ? (int)(e - q) : (int)strlen(q);
+                n++; if (zeichen_n(q, l) > 40) return "Höchstens 40 Zeichen je Eintrag.";
+                q += l; if (e) q += strlen(" · ");
+            }
+            if (n > 20) return "Höchstens 20 Einträge.";
+            x->mag_nicht = text_kopie(t[0]); break;
+        }
+        case P_STARTORT: x->startort = text_kopie(t[0]); break;
+        case P_AUTO_EINCHECKEN: x->auto_einchecken = v ? 1 : 0; break;
         default: return "Unbekanntes Feld.";
         }
         return NULL;

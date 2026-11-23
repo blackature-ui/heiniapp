@@ -210,7 +210,7 @@ const listeText = v => json(v, []).filter(x => typeof x === 'string').join(' · 
 
 emit('Profil', 'profile', profile, p => [
   `.name=${cstr(p.name)}`, `.status=${cstr(p.status || '')}`, `.wohnort=${cstr(p.wohnort || '')}`, `.strasse=${cstr(p.strasse || '')}`,
-  `.plz=${cstr(p.plz || '')}`, `.auto_name=${cstr(p.auto_name || '')}`, `.paypal=${cstr(p.paypal || '')}`, `.park_hinweis=${cstr(p.park_hinweis || '')}`,
+  `.plz=${cstr(p.plz || '')}`, `.startort=${cstr(p.startort || '')}`, `.auto_einchecken=${ja(p.auto_einchecken)}`, `.auto_name=${cstr(p.auto_name || '')}`, `.paypal=${cstr(p.paypal || '')}`, `.park_hinweis=${cstr(p.park_hinweis || '')}`,
   `.unvertraeglich=${cstr(listeText(p.unvertraeglich))}`, `.mag_nicht=${cstr(listeText(p.mag_nicht))}`,
   `.farbe=${Math.max(0, FARBEN.indexOf(p.farbe))}`, `.bild=${parseInt(p.bild, 10) || 0}`, `.gastgeber=${ja(p.gastgeber)}`, `.aktiv=${ja(p.aktiv)}`,
   `.heini=${ja(p.heini)}`, `.auto_=${ja(p.auto)}`, `.elektro=${ja(p.elektro)}`, `.auto_plaetze=${p.auto_plaetze || 0}`, `.kein_alkohol=${ja(p.kein_alkohol)}`,
@@ -268,6 +268,9 @@ emit('Frueher', 'frueher', frueher, f => {
 });
 emit('Medium', 'medien', medien, m => `${Math.max(0, R.WERTE.medienArten.indexOf(m.art))}, ${cstr(m.symbol || '')}, 0, ${ix('profile', m.profil_id)}, ${ix('profile', m.gastgeber_id)}, ${m.pos || 0}, ${zeit(m.erledigt_um)}, ${cstr(m.titel || '')}, ${cstr(m.adresse || '')}`);
 emit('Daumen', 'daumen', daumen, d => `${ix('medien', d.medien_id)}, ${ix('profile', d.profil_id)}, ${d.wert > 0 ? 1 : -1}`);
+const aktStimmen = lebend('aktivitaet_stimmen');
+const aktivitaeten = lebend('treffen_aktivitaeten').filter(a => ix('treffen', a.treffen_id) >= 0).sort((a, b) => a.id < b.id ? -1 : 1);
+emit('Aktivitaet', 'aktivitaeten', aktivitaeten, a => `${ix('treffen', a.treffen_id)}, ${ix('medien', a.medien_id)}, ${ix('profile', a.profil_id)}, ${cstr(a.titel || '')}, ${ja(a.erledigt)}, ${aktStimmen.filter(s => s.aktivitaet_id === a.id).length}`);
 emit('Agenda', 'agenda', agenda, a => `${ix('treffen', a.treffen_id)}, ${ix('profile', a.profil_id)}, ${tag(a.datum)}, ${minuten(a.uhrzeit)}, ${cstr(a.name)}, ${cstr(a.notiz || '')}, 0`);
 emit('Kommentar', 'kommentare', kommentare, k => `${ix('treffen', k.treffen_id)}, ${ix('profile', k.profil_id)}, ${ja(k.angepinnt)}, 0, ${idZeit(k.id)}, ${cstr(k.text)}`);
 emit('Trip', 'trips', trips, t => `${ix('treffen', t.treffen_id)}, ${ix('profile', t.profil_id)}, ${tag(t.datum)}, ${minuten(t.uhrzeit)}, ${cstr(t.titel || '')}, ${cstr(t.wann || '')}`);

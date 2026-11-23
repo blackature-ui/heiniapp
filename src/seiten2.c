@@ -200,10 +200,174 @@ static int schalter(const char *titel, const char *unter, int an) {
     return f;
 }
 
+/* ---- Listen „a · b · c“ (Unverträglichkeiten, Mag ich nicht) ---- */
+static int liste_teilen(const char *s, char teile[][48], int max) {
+    int n = 0;
+    while (s && *s && n < max) {
+        const char *e = strstr(s, " · "); int l = e ? (int)(e - s) : (int)strlen(s);
+        int k = l < 47 ? l : 47; memcpy(teile[n], s, (size_t)k); teile[n][k] = 0; if (k) n++;
+        s += l; if (e) s += strlen(" · ");
+    }
+    return n;
+}
+static void liste_bauen(char *ziel, int groesse, char teile[][48], int n, int ohne) {
+    ziel[0] = 0;
+    for (int i = 0; i < n; i++) { if (i == ohne) continue; if (ziel[0]) strncat(ziel, " · ", (size_t)(groesse - (int)strlen(ziel) - 1)); strncat(ziel, teile[i], (size_t)(groesse - (int)strlen(ziel) - 1)); }
+}
+/* Chips wie .mchips im Original; fokus: jeder Chip ist wählbar, Rückgabe = gewählter Chip oder -1 */
+static int chips(const char *liste, int waehlbar) {
+    char teile[20][48]; int n = liste_teilen(liste, teile, 20), gewaehlt = -1;
+    int x = ui_x(), y = ui_y(), zeilen = 1;
+    for (int i = 0; i < n; i++) {
+        int b = text_breite(teile[i], F_NORMAL) + 28 + (waehlbar ? 18 : 0);
+        if (b > ui_breite()) b = ui_breite();
+        if (x + b > ui_x() + ui_breite()) { x = ui_x(); y += 42; zeilen++; }
+        if (waehlbar) { if (ui_kachel_knopf(x, y, b, 34)) gewaehlt = i; if (ui_fokussiert_letztes()) ui_fokus_rahmen(x, y, b, 34, 17); }
+        gfx_runde_box(x, y, b, 34, 17, TH->flaeche2);
+        text_max(x + 14, y + 8, teile[i], b - 28 - (waehlbar ? 18 : 0), F_NORMAL, TH->text);
+        if (waehlbar) text(x + b - 26, y + 8, "×", F_NORMAL, TH->muted);
+        x += b + 8;
+    }
+    if (n) ui_weiter(zeilen * 42 + 4);
+    return gewaehlt;
+}
+static const char *konsole_kurz(const Konsole *ko) { return ko->art >= 0 && ko->art < KONSOLEN_N ? (KONSOLEN[ko->art].kurz && KONSOLEN[ko->art].kurz[0] ? KONSOLEN[ko->art].kurz : KONSOLEN[ko->art].name) : (ko->name && ko->name[0] ? ko->name : "Andere"); }
+static int spiele_von(int k, int art) { int n = 0; for (int d = 0; d < db.dinge.n; d++) if (!db.dinge.v[d].weg && db.dinge.v[d].konsole == k && db.dinge.v[d].art == art) n += art == DING_SPIEL ? 1 : db.dinge.v[d].anzahl; return n; }
+/* Konsolen als Farbkacheln (wie gamingHtml): bei Zusammenwohnenden die der ganzen Wohnung */
+static void konsolen_kacheln(int p) {
+    int partner = wohnt_mit(p), sp = 3, kb = ui_breite() / sp, k = 0, y0 = ui_y();
+    if (partner >= 0) { ui_text(tmp("Bei %s & %s", pname(raum_besitzer(p)), pname(raum_besitzer(p) == p ? partner : p)), F_FETT, TH->muted); y0 = ui_y(); }
+    for (int i = 0; i < db.konsolen.n; i++) {
+        const Konsole *ko = &db.konsolen.v[i];
+        if (ko->weg || (ko->profil != p && ko->profil != partner)) continue;
+        int x = ui_x() + (k % sp) * kb, y = y0 + (k / sp) * 84;
+        int an = ui_kachel_knopf(x + 3, y, kb - 6, 76);
+        if (ui_fokussiert_letztes()) ui_fokus_rahmen(x + 3, y, kb - 6, 76, 14);
+        uint16_t f = ko->art >= 0 && ko->art < KONSOLEN_N ? KONSOLEN[ko->art].farbe : TH->flaeche2;
+        gfx_runde_box(x + 3, y, kb - 6, 76, 14, f);
+        gfx_symbol(IC_GAMEPAD_2, x + 15, y + 10, 20, C_WEISS);
+        text_max(x + 15, y + 34, konsole_kurz(ko), kb - 30, F_FETT, C_WEISS);
+        int n = spiele_von(i, DING_SPIEL);
+        text(x + 15, y + 54, tmp("%d %s", n, n == 1 ? "Spiel" : "Spiele"), F_KLEIN, C_WEISS);
+        if (an) seite_auf(SE_GAMING, i);
+        k++;
+    }
+    if (k) ui_weiter(((k + sp - 1) / sp) * 84 + 4);
+}
+
+/* Profil ansehen (profilAnsehen im Original): Kopf, Adresse, Gaming-Equipment, Auto, Pärchen, Getränke, Schlafen, Parken,
+   PayPal, Räume, Essen, Verleiht, Wichtelgeschenke; beim eigenen Profil „Mein Profil bearbeiten“ */
+static void profil_ansehen(int p) {
+    const Profil *x = &db.profile.v[p];
+    int eigen = p == ich, bes = raum_besitzer(p), partner = partner_von(p);
+    const Profil *b = &db.profile.v[bes];
+    seiten_kopf(pname(p), -1);
+    /* Kopf in der Profilfarbe */
+    const Thema *pt = &THEMEN[x->farbe < 20 ? x->farbe : 0][design_dunkel ? 1 : 0];
+    int y = ui_y(), h = 150 + (x->status && x->status[0] ? 26 : 0);
+    gfx_runde_box(ui_x(), y, ui_breite(), h, 24, pt->accentCont);
+    avatar(p, BILD_B / 2 - 36, y + 14, 72);
+    text_mitte(BILD_B / 2, y + 92, eigen ? tmp("%s (du)", pname(p)) : pname(p), F_KOPF, pt->onAccentCont);
+    int yy = y + 126;
+    if (x->status && x->status[0]) { text_mitte(BILD_B / 2, yy, x->status, F_NORMAL, pt->onAccentCont); yy += 26; }
+    text_mitte(BILD_B / 2, yy, x->gastgeber && !x->aktiv ? "Gastgeber · Ehemalig" : x->gastgeber ? "Gastgeber" : !x->aktiv ? "Ehemalig" : "Heini", F_KLEIN, pt->onAccentCont);
+    ui_weiter(h + 12);
+    /* Adresse */
+    if (b->strasse[0] || b->wohnort[0]) {
+        ui_karte_art(KA_NORMAL, NULL, -1);
+        ui_info_symbol(IC_MAP_PIN, b->strasse[0] ? tmp("%s, %s %s", b->strasse, b->plz, b->wohnort) : b->wohnort, "Adresse");
+        ui_karte_ende();
+    }
+    /* Gaming-Equipment */
+    int nk = 0, wm = wohnt_mit(p);
+    for (int i = 0; i < db.konsolen.n; i++) if (!db.konsolen.v[i].weg && (db.konsolen.v[i].profil == p || db.konsolen.v[i].profil == wm)) nk++;
+    if (nk) { ui_ueberschrift("Gaming-Equipment", tmp("%d", nk)); konsolen_kacheln(p); }
+    /* Zeilen */
+    int zeilen = x->auto_ || partner >= 0 || x->kein_alkohol || x->wunsch_temp || x->gastgeber || (x->startort && x->startort[0]);
+    if (zeilen) {
+        ui_karte_art(KA_NORMAL, NULL, -1);
+        if (x->auto_) {
+            char t[120]; int n = snprintf(t, sizeof t, "%s", x->auto_name[0] ? x->auto_name : "Hat ein Auto");
+            if (x->auto_plaetze) n += snprintf(t + n, sizeof t - (size_t)n, " · %d %s frei", x->auto_plaetze, x->auto_plaetze == 1 ? "Platz" : "Plätze");
+            n += snprintf(t + n, sizeof t - (size_t)n, " · %s", x->elektro ? "Elektro" : "Verbrenner");
+            if (x->verbrauch) snprintf(t + n, sizeof t - (size_t)n, " · %d,%d %s/100 km", x->verbrauch / 10, x->verbrauch % 10, x->elektro ? "kWh" : "l");
+            ui_info_symbol(IC_CAR, t, "Auto");
+        }
+        if (x->startort && x->startort[0]) ui_info_symbol(IC_MAP_PIN, x->startort, "Fährt meistens ab");
+        if (partner >= 0) { int f = ui_flaeche(58); ui_person(partner, tmp("mit %s", partner == ich ? "dir" : pname(partner)), "Pärchen", "›"); if (f) seite_auf(SE_PROFIL, partner); }
+        if (x->kein_alkohol) ui_info_symbol(IC_BEER, "Trinkt keinen Alkohol", "Getränke");
+        if (x->wunsch_temp) ui_info_symbol(IC_THERMOMETER, tmp("Mag es nachts %d °C", x->wunsch_temp), "Schlafen");
+        if (x->gastgeber) ui_info_symbol(IC_SQUARE_PARKING, tmp("%s%s%s", !b->parkplaetze ? "Keine Parkplätze" : tmp("%d %s", b->parkplaetze, b->parkplaetze == 1 ? "Parkplatz" : "Parkplätze"), b->park_hinweis[0] ? " · " : "", b->park_hinweis), "Parkplätze");
+        ui_karte_ende();
+    }
+    if (x->paypal[0]) ui_symbolzeile(IC_EURO, tmp("PayPal: %s", x->paypal), TH->accentText);
+    if (!(b->strasse[0] || b->wohnort[0]) && !nk && !zeilen) ui_text("Noch nichts eingetragen.", F_NORMAL, TH->muted);
+    /* Räume */
+    if (x->gastgeber) {
+        int nr = 0;
+        for (int r = 0; r < db.raeume.n; r++) if (!db.raeume.v[r].weg && db.raeume.v[r].profil == bes && db.raeume.v[r].treffen < 0) nr++;
+        if (nr) {
+            ui_ueberschrift("Räume", tmp("%d", nr));
+            ui_karte_art(KA_NORMAL, NULL, -1);
+            for (int r = 0; r < db.raeume.n; r++) {
+                const Raum *ra = &db.raeume.v[r];
+                if (ra->weg || ra->profil != bes || ra->treffen >= 0) continue;
+                int np = 0; for (int k = 0; k < db.plaetze.n; k++) if (!db.plaetze.v[k].weg && db.plaetze.v[k].raum == r) np++;
+                ui_info_symbol(ra->art == RAUM_BAD ? IC_BATH : IC_BED_DOUBLE, ra->name, ra->art == RAUM_BAD ? "Bad" : tmp("Schlafraum, %d %s", np, np == 1 ? "Schlafplatz" : "Schlafplätze"));
+            }
+            ui_karte_ende();
+        }
+    }
+    /* Essen */
+    if (x->unvertraeglich[0] || x->mag_nicht[0]) {
+        ui_ueberschrift("Essen", NULL);
+        ui_karte_art(KA_NORMAL, NULL, -1);
+        ui_text("Unverträglichkeiten", F_FETT, TH->muted);
+        if (x->unvertraeglich[0]) chips(x->unvertraeglich, 0); else ui_text("Nichts eingetragen.", F_KLEIN, TH->muted);
+        ui_abstand(6);
+        ui_text("Mag ich nicht", F_FETT, TH->muted);
+        if (x->mag_nicht[0]) chips(x->mag_nicht, 0); else ui_text("Nichts eingetragen.", F_KLEIN, TH->muted);
+        ui_karte_ende();
+    }
+    /* Verleiht */
+    if (x->gastgeber) {
+        int nu = 0;
+        for (int u = 0; u < db.utensilien.n; u++) { const Utensil *ut = &db.utensilien.v[u]; if (!ut->weg && ut->profil == bes && (!ut->zaehlbar || ut->anzahl > 0)) nu++; }
+        if (nu) {
+            ui_ueberschrift("Verleiht", tmp("%d", nu));
+            ui_karte_art(KA_NORMAL, NULL, -1);
+            for (int u = 0; u < db.utensilien.n; u++) {
+                const Utensil *ut = &db.utensilien.v[u];
+                if (ut->weg || ut->profil != bes || (ut->zaehlbar && !ut->anzahl)) continue;
+                ui_info_symbol(IC_PACKAGE, ut->name, ut->zaehlbar ? tmp("%d zum Ausleihen", ut->anzahl) : "gibt's dort");
+            }
+            ui_karte_ende();
+        }
+    }
+    /* Wichtelgeschenke */
+    int nw = 0;
+    for (int i = 0; i < db.wichtel.n; i++) if (!db.wichtel.v[i].weg && db.wichtel.v[i].profil == p) nw++;
+    if (nw) {
+        ui_ueberschrift("Wichtelgeschenke", tmp("%d", nw));
+        ui_karte_art(KA_NORMAL, NULL, -1);
+        for (int j = db.wichtel.n - 1; j >= 0; j--) {
+            const Wichtel *wi = &db.wichtel.v[j];
+            if (wi->weg || wi->profil != p) continue;
+            if (wi->von >= 0) { if (ui_flaeche(58)) seite_auf(SE_PROFIL, wi->von); ui_person(wi->von, tmp("%d · %s", wi->jahr, wi->geschenk), tmp("von %s", wi->von == ich ? "dir" : pname(wi->von)), NULL); }
+            else ui_info_symbol(IC_GIFT, tmp("%d · %s", wi->jahr, wi->geschenk), NULL);
+        }
+        ui_karte_ende();
+    }
+    if (eigen && ui_knopf_breit("Mein Profil bearbeiten", KN_VOLL, IC_PENCIL)) seite_auf(SE_PROFIL, p + 1000);
+    ui_bereich_ende();
+}
+
 void seite_profil(int p) {
+    if (p < 1000) { profil_ansehen(p); return; }
+    p -= 1000;
     const Profil *x = &db.profile.v[p];
     int eigen = p == ich;
-    seiten_kopf(eigen ? "Mein Profil" : pname(p), eigen ? IC_SETTINGS : -1) == KOPF_EXTRA ? seite_auf(SE_EINST, 0) : (void)0;
+    seiten_kopf(eigen ? "Profil bearbeiten" : pname(p), eigen ? IC_SETTINGS : -1) == KOPF_EXTRA ? seite_auf(SE_EINST, 0) : (void)0;
     /* Über dich */
     ui_karte("Über dich", IC_SMILE);
     int y = ui_y();
@@ -264,6 +428,7 @@ void seite_profil(int p) {
             if (ui_eintrag_symbol(IC_USERS, NULL, tmp("%d Plätze", x->auto_plaetze), "mit Fahrer", "›")) feld_zahl(P_AUTO_PLAETZE, "Plätze mit Fahrer", x->auto_plaetze, 1, 0, "");
             if (ui_eintrag_symbol(IC_ZAP, NULL, tmp("%d,%d %s je 100 km", x->verbrauch / 10, x->verbrauch % 10, x->elektro ? "kWh" : "Liter"), "Verbrauch", "›")) feld_zahl(P_VERBRAUCH, "Verbrauch je 100 km", x->verbrauch, 3, 1, x->elektro ? "kWh" : "l");
             if (schalter("Elektroauto", "Verbrauch in kWh", x->elektro)) feld_setzen(P_ELEKTRO, !x->elektro);
+            if (ui_eintrag_symbol(IC_MAP_PIN, NULL, x->startort && x->startort[0] ? x->startort : "Startort fehlt", "Von wo fährst du meistens los? (für Fahrten)", "›")) feld_text(P_STARTORT, "Startort (zum Beispiel Köln)", x->startort ? x->startort : "", 60);
         }
     } else ui_text(x->auto_ ? tmp("%s · %d Plätze · %d,%d %s/100 km", x->auto_name[0] ? x->auto_name : "Auto", x->auto_plaetze, x->verbrauch / 10, x->verbrauch % 10, x->elektro ? "kWh" : "l") : "Kein Auto.", F_NORMAL, TH->text);
     ui_karte_ende();
@@ -273,8 +438,25 @@ void seite_profil(int p) {
         if (schalter("Kein Alkohol", "Bei 🍺 zahlst du nicht mit", x->kein_alkohol)) feld_setzen(P_KEIN_ALKOHOL, !x->kein_alkohol);
         if (ui_eintrag_symbol(IC_EURO, NULL, x->paypal[0] ? x->paypal : "PayPal-Name fehlt", "paypal.me/…", "›")) feld_text(P_PAYPAL, "PayPal-Name (paypal.me/…)", x->paypal, 40);
         if (ui_eintrag_symbol(IC_THERMOMETER, NULL, x->wunsch_temp ? tmp("%d °C", x->wunsch_temp) : "egal", "Wunschtemperatur im Schlafraum (0 = egal)", "›")) feld_zahl(P_WUNSCH_TEMP, "Wunschtemperatur (15–24, 0 = egal)", x->wunsch_temp, 2, 0, "°C");
-        if (ui_eintrag_symbol(IC_APPLE, NULL, x->unvertraeglich[0] ? x->unvertraeglich : "nichts", "Verträgt nicht", "›")) feld_text(P_UNVERTRAEGLICH, "Was verträgst du nicht?", x->unvertraeglich, 200);
-        if (ui_eintrag_symbol(IC_UTENSILS, NULL, x->mag_nicht[0] ? x->mag_nicht : "nichts", "Mag nicht", "›")) feld_text(P_MAG_NICHT, "Was magst du nicht?", x->mag_nicht, 200);
+        static const struct { int feld; const char *titel, *bsp; } ES[2] = { { P_UNVERTRAEGLICH, "Unverträglichkeiten", "z. B. Laktose, Nüsse" }, { P_MAG_NICHT, "Mag ich nicht", "z. B. Pilze, Koriander" } };
+        for (int e = 0; e < 2; e++) {
+            const char *l = e == 0 ? x->unvertraeglich : x->mag_nicht;
+            ui_abstand(6);
+            ui_text(ES[e].titel, F_FETT, TH->muted);
+            char teile[20][48]; int n = liste_teilen(l, teile, 20);
+            int weg = chips(l, 1);
+            if (!n) ui_text("Noch nichts eingetragen.", F_KLEIN, TH->muted);
+            if (weg >= 0) { static char rest[1000]; liste_bauen(rest, sizeof rest, teile, n, weg); feld_setzen_text(ES[e].feld, rest); }
+            if (ui_knopf_art(tmp("%s hinzufügen", e == 0 ? "Unverträglichkeit" : "Eintrag"), KN_TONAL, IC_PLUS)) tastatur(ID_PROFILFELD + 10 + e, tmp("%s (%s)", ES[e].titel, ES[e].bsp), "", 40);
+            const char *neu = tastatur_ergebnis(ID_PROFILFELD + 10 + e);
+            if (neu && neu[0]) {
+                int doppelt = 0;
+                for (int i = 0; i < n; i++) if (!strcmp(teile[i], neu)) doppelt = 1;
+                if (doppelt) meldung("Steht schon in der Liste.");
+                else { static char alles[1000]; snprintf(alles, sizeof alles, "%s%s%s", l, l[0] ? " · " : "", neu); feld_setzen_text(ES[e].feld, alles); }
+            }
+        }
+        ui_text("Optional. Alle Heinis sehen es in deinem Profil, damit beim Kochen und Bestellen keiner leer ausgeht.", F_KLEIN, TH->muted);
     } else {
         ui_zeile("Getränke", x->kein_alkohol ? "kein Alkohol" : "alles", TH->text);
         if (x->paypal[0]) ui_zeile("PayPal", x->paypal, TH->text);

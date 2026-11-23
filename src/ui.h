@@ -47,6 +47,7 @@ int ui_knopf_breit(const char *s, int art, int symbol);
 int ui_segment(const char *const *namen, int n, int aktiv);
 int ui_eintrag(int profil, const char *titel, const char *unter, const char *rechts);
 int ui_eintrag_symbol(int symbol, const char *emoji, const char *titel, const char *unter, const char *rechts);
+void ui_info_symbol(int symbol, const char *titel, const char *unter);
 void ui_person(int profil, const char *titel, const char *unter, const char *rechts);
 int ui_kachel_knopf(int x, int y, int b, int h);
 int ui_flaeche(int h);

@@ -29,11 +29,11 @@ void *tabelle_platz(void *v, int *cap, int n, size_t gross);
 
 /* ---------- Datensätze ---------- */
 typedef struct {
-    const char *name, *status, *wohnort, *strasse, *plz, *auto_name, *paypal, *park_hinweis;
+    const char *name, *status, *wohnort, *strasse, *plz, *auto_name, *paypal, *park_hinweis, *startort;
     const char *unvertraeglich, *mag_nicht;   /* mit " · " getrennte Liste */
     uint8_t farbe;          /* Index in FARBEN */
     uint8_t bild;           /* 1..48, 0 = keins */
-    uint8_t gastgeber, aktiv, heini, auto_, elektro, auto_plaetze, kein_alkohol, parkplaetze;
+    uint8_t gastgeber, aktiv, heini, auto_, elektro, auto_plaetze, kein_alkohol, parkplaetze, auto_einchecken;
     int8_t wunsch_temp;     /* 15..24, 0 = egal */
     int16_t verbrauch;      /* Zehntel-Liter (bzw. Zehntel-kWh) je 100 km */
 } Profil;
@@ -109,6 +109,8 @@ typedef struct { int16_t nr, tage; int32_t monat; /* JJJJMM */ const char *name;
 enum { MED_YOUTUBE = 0, MED_SPOTIFY, MED_LINK, MED_IDEE, MED_BUCKET };
 typedef struct { uint8_t art; const char *symbol; uint8_t geloescht; int8_t profil, gastgeber; int16_t pos; zeit_t erledigt_um; const char *titel, *adresse; } Medium;
 typedef struct { int16_t medium; int8_t profil; int8_t wert; } Daumen;
+/* alte Aktivitäten eines Treffens (vor 1.60.0), nur Anzeige bei beendeten Treffen */
+typedef struct { int16_t treffen, medium; int8_t profil; const char *titel; uint8_t erledigt, stimmen; } Aktivitaet;
 typedef struct { int16_t treffen; int8_t profil; tag_t datum; int16_t uhrzeit; /* Minuten, -1 = keine */ const char *name, *notiz; uint8_t geloescht; } Agenda;
 typedef struct { int16_t treffen; int8_t profil; uint8_t angepinnt, geloescht; zeit_t zeit; const char *text; } Kommentar;
 typedef struct { int16_t treffen; int8_t profil; tag_t datum; int16_t uhrzeit; const char *titel, *wann; uint8_t geloescht; } Trip;
@@ -154,7 +156,7 @@ typedef struct {
     TABELLE(Erfolg) erfolge; TABELLE(Paar) paare;
     TABELLE(Ausgabe) ausgaben; TABELLE(Posten) posten; TABELLE(Zahlung) zahlungen;
     TABELLE(Frueher) frueher; TABELLE(Medium) medien; TABELLE(Daumen) daumen;
-    TABELLE(Agenda) agenda; TABELLE(Kommentar) kommentare;
+    TABELLE(Agenda) agenda; TABELLE(Aktivitaet) aktivitaeten; TABELLE(Kommentar) kommentare;
     TABELLE(Trip) trips; TABELLE(Fahrt) fahrten; TABELLE(Mitfahrer) mitfahrer;
     TABELLE(Temperatur) temperatur; TABELLE(Verlauf) verlauf;
 } Datenbank;

@@ -53,7 +53,7 @@ int text_teile(char *s, char **teile, int max);   /* zerlegt an \x1f */
 #define TRENN "\x1f"
 /* Felder für A_PROFIL (a) */
 enum { P_FARBE = 1, P_BILD, P_WOHNORT, P_STRASSE, P_PLZ, P_GASTGEBER, P_AUTO, P_AUTO_NAME, P_AUTO_PLAETZE, P_VERBRAUCH, P_ELEKTRO,
-       P_KEIN_ALKOHOL, P_PAYPAL, P_WUNSCH_TEMP, P_PARKPLAETZE, P_PARK_HINWEIS, P_UNVERTRAEGLICH, P_MAG_NICHT };
+       P_KEIN_ALKOHOL, P_PAYPAL, P_WUNSCH_TEMP, P_PARKPLAETZE, P_PARK_HINWEIS, P_UNVERTRAEGLICH, P_MAG_NICHT, P_STARTORT, P_AUTO_EINCHECKEN };
 extern int letzte_neue_nachricht;         /* Index der zuletzt angelegten Nachricht */
 
 #endif
